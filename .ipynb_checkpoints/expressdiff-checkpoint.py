@@ -84,7 +84,7 @@ def main():
     # Display an HTML report from disk
     st.subheader("Raw Reads Quality Control")
     
-    '''
+    
     html_path = Path("raw_multiqc_out/multiqc_report.html")
 
     if html_path.exists():
@@ -103,7 +103,7 @@ def main():
     else:
         st.warning(f"No HTML report found at: {html_path}")        
 
-    '''
+    
 
     st.markdown("---")
 
@@ -159,7 +159,7 @@ def main():
     # Display an HTML report from disk
     st.subheader("Trimmed Reads Quality Control")
     
-    '''
+    
     html_path = Path("trimmed_multiqc_out/multiqc_report.html")
 
     if html_path.exists():
@@ -176,7 +176,7 @@ def main():
             
     else:
         st.warning(f"No HTML report found at: {html_path}")        
-'''
+
     
     # Upload reference files
     st.subheader("Upload  **.gtf** and **.fa** files (GTF annotation and FASTA genome).")
