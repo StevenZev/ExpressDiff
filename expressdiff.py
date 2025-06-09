@@ -588,13 +588,17 @@ def main():
             st.info("No FeatureCounts output found yet.")
     st.markdown("##### Extracted Counts Matrix:")
     
-    counts_matrix = pd.read_csv("counts_matrix/deseq_counts_matrix.csv")
-    counts_matrix.columns = [extract_sample_name(col) for col in counts_matrix.columns]
-    
-    #counts_matrix = counts_matrix.T
-    
-    st.dataframe(counts_matrix)
-    #print(counts_df)
+    counts_path = Path("counts_matrix/deseq_counts_matrix.csv")
+    if counts_path.exists():
+        count_matrix = pd.read_csv(counts_path, index_col=0)
+
+        #counts_matrix = pd.read_csv("counts_matrix/deseq_counts_matrix.csv")
+        counts_matrix.columns = [extract_sample_name(col) for col in counts_matrix.columns]
+
+        #counts_matrix = counts_matrix.T
+
+        st.dataframe(counts_matrix)
+        #print(counts_df)
     
     st.markdown("---")
     

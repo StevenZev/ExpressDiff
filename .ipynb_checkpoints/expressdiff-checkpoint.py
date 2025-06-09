@@ -11,6 +11,18 @@ import re
 import pandas as pd
 
 
+
+
+import pickle as pkl
+
+from pydeseq2.dds import DeseqDataSet
+from pydeseq2.default_inference import DefaultInference
+from pydeseq2.ds import DeseqStats
+from pydeseq2.utils import load_example_data
+
+
+
+ 
 #st.set_page_config(layout="wide")
 st.set_page_config(layout="centered")
 
@@ -576,11 +588,17 @@ def main():
             st.info("No FeatureCounts output found yet.")
     st.markdown("##### Extracted Counts Matrix:")
     
-    counts_matrix = pd.read_csv("counts_matrix/deseq_counts_matrix.csv")
-    counts_matrix.columns = [extract_sample_name(col) for col in counts_matrix.columns]
-    
-    st.dataframe(counts_matrix)
-    #print(counts_df)
+    counts_path = Path("counts_matrix/deseq_counts_matrix.csv")
+    if counts_path.exists():
+        count_matrix = pd.read_csv(counts_path, index_col=0)
+
+        #counts_matrix = pd.read_csv("counts_matrix/deseq_counts_matrix.csv")
+        counts_matrix.columns = [extract_sample_name(col) for col in counts_matrix.columns]
+
+        #counts_matrix = counts_matrix.T
+
+        st.dataframe(counts_matrix)
+        #print(counts_df)
     
     st.markdown("---")
     
@@ -641,8 +659,55 @@ def main():
         except Exception as e:
             st.error(f"Error loading metadata: {e}")
 
+            
+    st.markdown("---")
+    
+    st.subheader("Differential Analysis with PyDESeq-2")
+    
+    
+    if st.button("Run Differential Analysis (External Script)"):
+        Path("deseq_results").mkdir(exist_ok=True)
+        result = subprocess.run(["bash", "-c", "module load gcc/12.4.0 && python3 run_deseq2.py"])
 
-        
+
+        if result.returncode == 0:
+            st.success("DESeq2 analysis complete!")
+            top_degs_path = Path("deseq_results/top_degs.csv")
+            full_results_path = Path("deseq_results/full_results.csv")
+            if top_degs_path.exists():
+                top_degs = pd.read_csv(top_degs_path, index_col=0)
+                st.session_state["top_degs"] = top_degs
+                st.dataframe(top_degs)
+            if full_results_path.exists():
+                with open(full_results_path, "rb") as f:
+                    st.download_button(
+                        label="📥 Download Full DESeq2 Results (CSV)",
+                        data=f,
+                        file_name="full_results.csv",
+                        mime="text/csv"
+                    )
+            else:
+                st.warning("Top DEGs file not found.")
+        else:
+            st.error("Error running DESeq2.")
+            st.code(result.stderr)
+            
+    top_degs_path = Path("deseq_results/top_degs.csv")
+    full_results_path = Path("deseq_results/full_results.csv")
+    if top_degs_path.exists():
+        top_degs = pd.read_csv(top_degs_path, index_col=0)
+        st.session_state["top_degs"] = top_degs
+        st.dataframe(top_degs)
+    else:
+        st.warning("Top DEGs file not found.")
+    if full_results_path.exists():
+            with open(full_results_path, "rb") as f:
+                st.download_button(
+                    label="📥 Download Full DESeq2 Results (CSV)",
+                    data=f,
+                    file_name="full_results.csv",
+                    mime="text/csv"
+                )
 
 
 
