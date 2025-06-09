@@ -767,6 +767,15 @@ def main():
                 summary = pd.read_csv(summary_path, index_col=0)
                 st.session_state["summary"] = summary
                 st.dataframe(summary)
+                
+                with open(summary_path, "rb") as f:
+                    st.download_button(
+                        label="📥 Download Summary Statistics .csv",
+                        data=f,
+                        file_name="expressdiff_summary.csv",
+                        mime="text/csv"
+                    )
+
             else:
                 st.warning("Summary file not found.")
         else:
