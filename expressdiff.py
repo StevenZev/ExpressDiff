@@ -109,12 +109,69 @@ def extract_counts(path):
 
 
 
+ACCOUNT_FILE = Path("selected_account.txt")
+
+def save_account(account):
+    ACCOUNT_FILE.write_text(account)
+
+def load_account():
+    if ACCOUNT_FILE.exists():
+        return ACCOUNT_FILE.read_text().strip()
+    else:
+        return None
+
+def get_valid_accounts():
+    try:
+        result = subprocess.run(["allocations"], capture_output=True, text=True, check=True)
+        lines = result.stdout.strip().splitlines()
+        data_lines = lines[2:]
+
+        accounts = []
+        for line in data_lines:
+            parts = line.split()
+            if len(parts) == 4 and parts[0] != "run:":
+                accounts.append(parts[0])
+        return accounts
+    except Exception as e:
+        print(f"Error fetching accounts: {e}")
+        return []
 
 def main():
-    st.title("RNA-seq Adapter Selection and Report Viewer")
+    st.subheader("SLURM Allocation")
+
+    current_account = load_account()
+
+    if current_account is None:
+        st.info("No account selected yet. Please choose one.")
+        accounts = get_valid_accounts()
+        if accounts:
+            selected_account = st.selectbox("Select SLURM account to charge:", accounts)
+            if st.button("Save Selected Account"):
+                save_account(selected_account)
+                st.success(f"Saved allocation: `{selected_account}`")
+                st.rerun()
+        else:
+            st.error("Could not fetch SLURM accounts.")
+    else:
+        st.markdown(f"**Currently selected account:** `{current_account}`")
+        if st.checkbox("Change allocation"):
+            accounts = get_valid_accounts()
+            if accounts:
+                selected_account = st.selectbox("Select SLURM account to charge:",
+                                                accounts, index=accounts.index(current_account) if current_account in accounts else 0)
+                if st.button("Save Selected Account"):
+                    save_account(selected_account)
+                    st.success(f"Saved new allocation: `{selected_account}`")
+                    st.rerun()
+            else:
+                st.error("Could not fetch SLURM accounts.")
+
+    # Use `current_account` safely in your submission code
+    selected_account = load_account()
+
     
     
-    
+    old_allocation_selector = '''
     st.subheader("Select Allocation To Charge:")
     accounts = get_valid_accounts()
     if accounts:
@@ -123,24 +180,8 @@ def main():
         st.error("Could not fetch SLURM accounts.")
         
     #selected_account
-
+    '''
     
-    '''
-    ##### Working(ish) code for efficiency improvement:
-    st.subheader("SLURM Allocation")
-    use_custom_allocation = st.checkbox("Change Allocation (select an account)", True)
-
-    if use_custom_allocation:
-        accounts = get_valid_accounts()
-        if accounts:
-            selected_account = st.selectbox("Select SLURM account to charge:", accounts)
-        else:
-            st.error("Could not retrieve SLURM account list.")
-            selected_account = default_account
-    #else:
-        #selected_account = default_account
-        #st.text(f"Using default account: {default_account}")
-    '''
     
     
 
@@ -590,7 +631,7 @@ def main():
     
     counts_path = Path("counts_matrix/deseq_counts_matrix.csv")
     if counts_path.exists():
-        count_matrix = pd.read_csv(counts_path, index_col=0)
+        counts_matrix = pd.read_csv(counts_path, index_col=0)
 
         #counts_matrix = pd.read_csv("counts_matrix/deseq_counts_matrix.csv")
         counts_matrix.columns = [extract_sample_name(col) for col in counts_matrix.columns]
@@ -709,7 +750,32 @@ def main():
                     mime="text/csv"
                 )
 
+    st.markdown('---')
+    
+    st.subheader("Compile + Display Summary Statistics")
+    
+    
+    if st.button("Compile Stats (External Script)"):
+        Path("summary_matrix").mkdir(exist_ok=True)
+        result = subprocess.run(["bash", "-c", "module load gcc/12.4.0 && python3 compile_summaries.py"])
 
+
+        if result.returncode == 0:
+            st.success("Statistics compiled!")
+            summary_path = Path("summary_matrix/trim_map_summary.csv")
+            if summary_path.exists():
+                summary = pd.read_csv(summary_path, index_col=0)
+                st.session_state["summary"] = summary
+                st.dataframe(summary)
+            else:
+                st.warning("Summary file not found.")
+        else:
+            st.error("Error running compiler script.")
+            st.code(result.stderr)
+    
+    
+    
+    
 
 if __name__ == "__main__":
     main()
