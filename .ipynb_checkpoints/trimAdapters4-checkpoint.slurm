@@ -6,70 +6,56 @@
 #SBATCH --account=rc_student-workers
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
-
 #SBATCH --output=./trim_logs/slurm_%j.out
+
 mkdir -p ./trim_logs/
+mkdir -p ./trimmed_reads/
+
+# Load Trimmomatic module
+module load trimmomatic
+module load parallel
 
 # Pull user adapter selection
 ADAPTER_NAME=$(cat selected_adapter.txt)
-
-echo "Using adapter: $ADAPTER"
-
-# Check if an argument was passed
-if [ $# -gt 0 ]; then
-  ADAPTER_NAME="$1"
-fi
-
-# Construct full adapter path
 ADAPTER_FILE="/apps/software/standard/core/trimmomatic/0.39/adapters/${ADAPTER_NAME}.fa"
 
-# Check if adapter file exists
+# Validate adapter file
 if [ ! -f "$ADAPTER_FILE" ]; then
   echo "ERROR: Adapter file '$ADAPTER_FILE' does not exist."
-  echo "Please use one of the available options:"
+  echo "Available options:"
   ls /apps/software/standard/core/trimmomatic/0.39/adapters/*.fa | xargs -n 1 basename | sed 's/\.fa$//'
   exit 1
 fi
 
+# Clear trimmed_reads/
+rm -f ./trimmed_reads/*.fq.gz
 
-# Define input and output directories
-INPUT_DIR=./raw_reads/
-OUTPUT_DIR=./trimmed_reads/
-
-echo "Clearing trimmed_reads directory."
-rm -f ${OUTPUT_DIR}/*.fq.gz
-
-# Load Trimmomatic module
-module load trimmomatic
-echo "Using adapter file: $ADAPTER_FILE"
-
-# Create output directory if it doesn't exist
-mkdir -p "${OUTPUT_DIR}"
-
-# Collect all forward read files into an array
-FILES=($(ls ${INPUT_DIR}*_1.fq.gz))
-
-# Loop over each file pair
-for FILE1 in "${FILES[@]}"; do
+# Trimming function
+trim_pair() {
+  FILE1=$1
   FILE2=${FILE1/_1.fq.gz/_2.fq.gz}
   BASE=$(basename "$FILE1" _1.fq.gz)
-
-  echo "Processing file pair: $FILE1 and $FILE2"
+  
+  echo "[START] Trimming ${BASE} on $(hostname) at $(date)" >&1
 
   java -Xmx16G -jar $EBROOTTRIMMOMATIC/trimmomatic-0.39.jar \
-    PE -threads 8 \
+    PE -threads 2 \
     "$FILE1" "$FILE2" \
-    "${OUTPUT_DIR}/${BASE}_forward_paired.fq.gz" "${OUTPUT_DIR}/${BASE}_forward_unpaired.fq.gz" \
-    "${OUTPUT_DIR}/${BASE}_reverse_paired.fq.gz" "${OUTPUT_DIR}/${BASE}_reverse_unpaired.fq.gz" \
+    "trimmed_reads/${BASE}_forward_paired.fq.gz" "trimmed_reads/${BASE}_forward_unpaired.fq.gz" \
+    "trimmed_reads/${BASE}_reverse_paired.fq.gz" "trimmed_reads/${BASE}_reverse_unpaired.fq.gz" \
     ILLUMINACLIP:"$ADAPTER_FILE":2:30:10 \
     LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20 MINLEN:36
+}
 
-  echo "Trimming complete for ${BASE}"
-  
-  
-done
+export -f trim_pair
+export ADAPTER_FILE
+export EBROOTTRIMMOMATIC
 
+# Run in parallel: 16 CPUs total / 2 threads per task = 8 concurrent jobs
+find raw_reads -name "*_1.fq.gz" | parallel -j 8 trim_pair {}
+
+# Final flag
 touch trim_logs/trimming_done.flag
 echo "Wrote completion flag"

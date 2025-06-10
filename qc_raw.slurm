@@ -5,33 +5,34 @@
 #SBATCH --account=rc_student-workers
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=8G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=16G
 #SBATCH --output=./qc_logs/fastqc_multiqc_%j.out
 ##SBATCH --error=./slurm_logs/fastqc_multiqc_%j.err
 
 # Clean up previous outputs
-## rm -rf qc_logs/*
 rm -rf raw_fastqc_out/*
 rm -rf raw_multiqc_out/*
-
 
 # Create necessary output directories
 mkdir -p raw_fastqc_out
 mkdir -p raw_multiqc_out
 mkdir -p ./qc_logs
 
-# Load FastQC and MultiQC modules (adjust module names as required by your HPC system)
+# Load required modules
 module load fastqc
 module load multiqc
+module load parallel  # Make sure GNU parallel is available
 
-echo "Starting FastQC analysis for FASTQ files in ./raw_reads/"
+echo "Starting parallel FastQC analysis for FASTQ files in ./raw_reads/"
 
-# Loop over all .fq.gz files in the raw_reads directory and run FastQC
-for fq in ./raw_reads/*.fq.gz; do
-    echo "Processing file: ${fq}"
-    fastqc -o raw_fastqc_out "${fq}"
-done
+# Export FastQC command for GNU parallel
+export FASTQC_OUT_DIR="raw_fastqc_out"
+export THREADS_PER_FILE=1
+
+# Run FastQC in parallel across all files (1 thread per file, 8 files max in parallel)
+find ./raw_reads -name "*.fq.gz" | parallel -j $SLURM_CPUS_PER_TASK --halt now,fail=1 \
+    "fastqc --threads ${THREADS_PER_FILE} -o ${FASTQC_OUT_DIR} {}"
 
 echo "FastQC analysis complete. Running MultiQC to aggregate the reports."
 
@@ -40,6 +41,7 @@ multiqc -o raw_multiqc_out raw_fastqc_out
 
 echo "MultiQC aggregation complete. All outputs are saved in raw_fastqc_out/ and raw_multiqc_out/"
 
+# Flag for completion
 touch qc_logs/fastqc_multiqc_done.flag
 
 echo "Created completion flag."
