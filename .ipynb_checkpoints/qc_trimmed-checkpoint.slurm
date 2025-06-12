@@ -5,7 +5,7 @@
 #SBATCH --account=rc_student-workers
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=4            # ← we’ll use these 4 cores in parallel
 #SBATCH --mem=8G
 #SBATCH --output=./qc_logs/fastqc_multiqc_%j.out
 ##SBATCH --error=./slurm_logs/fastqc_multiqc_%j.err
@@ -15,9 +15,10 @@ mkdir -p trimmed_fastqc_out
 mkdir -p trimmed_multiqc_out
 mkdir -p ./qc_logs
 
-# Load FastQC and MultiQC modules (adjust module names as required by your HPC system)
+# Load FastQC, MultiQC, and GNU parallel modules
 module load fastqc
 module load multiqc
+module load gnu-parallel
 
 # Determine which files to process
 if [[ "$1" == "-skip" ]]; then
@@ -30,11 +31,15 @@ fi
 
 echo "Starting FastQC analysis for files matching: $FILE_PATTERN"
 
-# Loop over selected .fq.gz files and run FastQC
-for fq in $FILE_PATTERN; do
-    echo "Processing file: ${fq}"
-    fastqc -o trimmed_fastqc_out "${fq}"
-done
+# Export environment so parallel can see module commands
+export FASTQC_OPTS="-o trimmed_fastqc_out"
+
+# Use GNU parallel to launch up to $SLURM_CPUS_PER_TASK jobs simultaneously
+# {} is each filename; --jobs uses the number of CPUs allocated
+parallel --jobs "${SLURM_CPUS_PER_TASK}" \
+         --eta \
+         --joblog ./qc_logs/parallel_fastqc.log \
+         fastqc $FASTQC_OPTS {} ::: ${FILE_PATTERN}
 
 echo "FastQC analysis complete. Running MultiQC to aggregate the reports."
 

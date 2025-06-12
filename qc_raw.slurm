@@ -22,7 +22,7 @@ mkdir -p ./qc_logs
 # Load required modules
 module load fastqc
 module load multiqc
-module load parallel  # Make sure GNU parallel is available
+module load parallel
 
 echo "Starting parallel FastQC analysis for FASTQ files in ./raw_reads/"
 

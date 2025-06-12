@@ -23,8 +23,8 @@ from pydeseq2.utils import load_example_data
 
 
  
-#st.set_page_config(layout="wide")
-st.set_page_config(layout="centered")
+st.set_page_config(layout="wide")
+#st.set_page_config(layout="centered")
 
 # Define the target directory for saving uploaded files
 RAW_READS_DIR = Path("raw_reads")
@@ -713,7 +713,7 @@ def main():
 
         if result.returncode == 0:
             st.success("DESeq2 analysis complete!")
-            top_degs_path = Path("deseq_results/top_degs.csv")
+            x = '''top_degs_path = Path("deseq_results/top_degs.csv")
             full_results_path = Path("deseq_results/full_results.csv")
             if top_degs_path.exists():
                 top_degs = pd.read_csv(top_degs_path, index_col=0)
@@ -728,7 +728,7 @@ def main():
                         mime="text/csv"
                     )
             else:
-                st.warning("Top DEGs file not found.")
+                st.warning("Top DEGs file not found.")'''
         else:
             st.error("Error running DESeq2.")
             st.code(result.stderr)
@@ -762,15 +762,16 @@ def main():
 
         if result.returncode == 0:
             st.success("Statistics compiled!")
-            summary_path = Path("summary_matrix/trim_map_summary.csv")
+            summary_path = Path("summary_matrix/trim_star_summary.csv")
+            full_summary_path = Path("summary_matrix/full_trim_star_stats.csv")
             if summary_path.exists():
                 summary = pd.read_csv(summary_path, index_col=0)
                 st.session_state["summary"] = summary
                 st.dataframe(summary)
                 
-                with open(summary_path, "rb") as f:
+                with open(full_summary_path, "rb") as f:
                     st.download_button(
-                        label="📥 Download Summary Statistics .csv",
+                        label="📥 Download Full Summary Statistics .csv",
                         data=f,
                         file_name="expressdiff_summary.csv",
                         mime="text/csv"
