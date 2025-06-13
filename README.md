@@ -11,5 +11,5 @@ Differential Analysis Pipeline for RNA-Seq Data
 ![image info](pictures/run.png)
 ## Scroll to bottom and copy the Network URL
 ![image info](pictures/networkurl.png)
-## Go to desktop and open Firefox then paste in Network URL to open app
+## Go to desktop and open Firefox then paste in Network URL in a new tab to open app
 ![image_info](pictures/desktop.png)
