@@ -4,7 +4,9 @@ Differential Analysis Pipeline for RNA-Seq Data
 # Setup
 ## Start a JupyterLab job with sufficient memory (we recommend at least 32GB) and a Desktop
 ## Clone Git Repository
-``` git clone https://github.com/StevenZev/ExpressDiff.git ```
+```shell
+git clone https://github.com/StevenZev/ExpressDiff.git
+```
 ## Open setup.ipynb
 ## Hit button to restart kernel and run all cells
 ### Make sure to use Python3 kernel
