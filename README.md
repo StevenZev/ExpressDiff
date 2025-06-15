@@ -40,8 +40,7 @@ ls
 ```
 Then, can click on the ExpressDiff folder on the left to open it in the sidebar
 ## Open setup.ipynb (from the sidebar on the left)
-### Hit button to restart kernel and run all cells
-### Make sure to use Python3 kernel
+Hit button to restart kernel and run all cells and make sure to use Python3 kernel
 ![image info](pictures/run.png)
 ## Scroll to bottom and copy the Network URL
 ![image info](pictures/networkurl.png)
@@ -51,3 +50,4 @@ Then, can click on the ExpressDiff folder on the left to open it in the sidebar
 # MEMORY
 if you see this, then you may need to allocate more memory:
 ![image_info](pictures/error.png)
+The AxiosError: NetworkError means that the program couldn't connect because the program could have terminated because it didn't have enough memory. The amount of memory you need depends on the files you're using (the file manager should show how large the files are). Also, can drag or control click to select multiple files.
