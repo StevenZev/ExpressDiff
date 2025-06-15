@@ -81,8 +81,8 @@ summary_stats = full_stats.loc[:, [
 full_stats.to_csv("summary_matrix/full_trim_star_stats.csv")
 summary_stats.to_csv("summary_matrix/trim_star_summary.csv")
 
-print(full_stats.head())
-print(summary_stats.head())
+#print(full_stats.head())
+#print(summary_stats.head())
 
 
 

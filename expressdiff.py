@@ -773,7 +773,7 @@ def main():
                     st.download_button(
                         label="📥 Download Full Summary Statistics .csv",
                         data=f,
-                        file_name="expressdiff_summary.csv",
+                        file_name="summary_matrix/full_trim_star_stats.csv",
                         mime="text/csv"
                     )
 
