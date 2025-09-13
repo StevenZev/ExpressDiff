@@ -3,3 +3,18 @@ selected_account.txt
 selected_adapter.txt
 venv
 .ipynb_checkpoints/
+
+# Backend cache and temporary files
+backend/__pycache__/
+backend/**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+
+# Run data (user-generated content)
+runs/
+
+# Environment files
+.env
+.env.local
