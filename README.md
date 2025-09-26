@@ -1,7 +1,50 @@
 # ExpressDiff
 Differential Analysis Pipeline for RNA-Seq Data
 
-# Setup
+## 🚀 Quick Start with FastX Desktop
+
+### 1. Start Interactive Session
+```bash
+# Get an interactive allocation
+salloc -A <your_account> -p standard -c 4 --mem=16G -t 02:00:00
+```
+
+### 2. Launch ExpressDiff
+```bash
+# Clone and start (first time)
+git clone https://github.com/StevenZev/ExpressDiff.git
+cd ExpressDiff
+
+# Launch the application
+./launch_expressdiff.sh
+```
+
+### 3. Access in FastX Browser
+- **Frontend**: http://localhost:3000 (full UI)  
+- **API docs**: http://localhost:8000/docs (backend only)
+
+### 4. Test with Sample Data
+```bash
+# Generate test files
+./create_test_data.sh
+
+# Then upload files from test_data/ folder in the UI
+```
+
+---
+
+## 📋 Complete Workflow
+
+1. **Create Run** → Name your analysis and select SLURM account
+2. **Upload Files** → Drag & drop FASTQ files (paired: *_1.fq.gz, *_2.fq.gz)  
+3. **Validate Samples** → Check file pairing automatically
+4. **Run Pipeline** → Execute stages: QC → Trim → Align → Count
+5. **Monitor Progress** → Real-time status updates and job tracking
+6. **View Results** → Access MultiQC reports and count matrices
+
+---
+
+# Legacy Setup (Streamlit)
 ## Go to ood.hpc.virginia.edu to start a Desktop interactive job and a JupyterLab job
 if prompted, sign in with UVA account
 ### Find the button to start interactive jobs in the taskbar on top
@@ -54,9 +97,37 @@ The AxiosError: NetworkError means that the program couldn't connect because the
 
 ---
 
+# 🎯 New Features (v2.0)
+
+## 📁 **File Management**
+- **Drag & Drop Upload**: Intuitive file upload with progress tracking
+- **Smart Validation**: Automatic FASTQ pairing detection (_1/_2 naming)
+- **File Type Detection**: FASTQ, FASTA, GTF, and metadata support
+- **Upload Status**: Real-time progress and error handling
+
+## ⚙️ **Pipeline Control**  
+- **Stage Management**: Execute QC → Trim → Align → Count with dependency checks
+- **Real-time Monitoring**: Auto-refresh job status every 10 seconds
+- **SLURM Integration**: Submit and track cluster jobs seamlessly  
+- **Dependency Enforcement**: Prevents invalid stage execution order
+
+## 🖥️ **Modern Interface**
+- **Tabbed Workflow**: Files → Pipeline → Results in organized tabs
+- **Status Indicators**: Visual progress bars and stage completion badges
+- **Run Management**: Create, monitor, and manage multiple pipeline runs
+- **Account Integration**: SLURM account selection and resource allocation
+
+## 📊 **Monitoring & Feedback**
+- **Job Status Tracking**: Live SLURM job monitoring with job IDs
+- **Completion Flags**: Automatic stage completion detection  
+- **Error Surfacing**: Clear error messages and validation feedback
+- **Progress Visualization**: Pipeline completion percentages and summaries
+
+---
+
 # FastAPI Backend (New Architecture)
 
-ExpressDiff now includes a modern FastAPI backend that provides a REST API for pipeline management. This enables future React frontend development and programmatic access.
+ExpressDiff now includes a modern FastAPI backend that provides a REST API for pipeline management. This enables React frontend development and programmatic access.
 
 ## Backend Features
 
@@ -232,3 +303,73 @@ The API is designed to support a React frontend with:
 - Workflow management interface
 
 For questions or issues with the new API backend, check the logs or refer to the interactive API documentation.
+
+---
+
+## HPC Module Quick Launch (Proposed)
+
+To make ExpressDiff trivially runnable for users, you can package it as an environment module. Below is a lightweight approach already scaffolded in this repo.
+
+### 1. Provided Artifacts
+
+| File | Purpose |
+|------|---------|
+| `bin/expressdiff_api.sh` | Launcher script: creates `.venv`, installs deps, starts FastAPI |
+| `modulefile` | Example environment module definition (Tcl) adding `bin` to `PATH` |
+
+### 2. Install as a Site Module (Admin or Shared Space)
+
+Assuming a shared module root like `/apps/modules/bio/ExpressDiff`:
+
+```bash
+MODULE_ROOT=/apps/modules/bio/ExpressDiff
+mkdir -p "$MODULE_ROOT"
+cp -r * "$MODULE_ROOT"  # or a git clone into that path
+```
+
+Then register `modulefile` under your modulefiles tree, e.g.:
+
+```bash
+ln -s "$MODULE_ROOT/modulefile" /apps/modules/modulefiles/ExpressDiff
+```
+
+Reload module cache if required by your environment (e.g. `module refresh`).
+
+### 3. User Workflow
+
+```bash
+module load ExpressDiff
+expressdiff_api.sh 8000   # or omit port (defaults 8000)
+```
+
+The script will:
+1. Create `.venv` if missing
+2. Install Python requirements
+3. Launch Uvicorn on the chosen port
+
+### 4. SSH Tunnel (From Local Machine)
+
+```bash
+ssh -N -L 8000:localhost:8000 <user>@<cluster-login> # Then in another shell start module
+```
+
+If the API runs on a compute node, adapt by forwarding to the node host returned by the job (`squeue -j <jobid> -o '%B'`).
+
+### 5. Frontend Testing Locally
+
+While backend runs on HPC port 8000, start the React dev server locally (after installing Node):
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+Set `REACT_APP_API_BASE` (or edit `frontend/src/api/client.ts`) if you need a custom API URL.
+
+### 6. Notes & Future Enhancements
+- Add a pre-built conda env to skip per-user pip install latency.
+- Optional: provide a `singularity exec` wrapper for tool version stability.
+- Add health/status log path export (e.g. `EXPRESSDIFF_RUNLOG`).
+
+---
