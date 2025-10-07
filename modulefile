@@ -9,9 +9,29 @@ proc ModulesHelp { } {
 module-whatis "ExpressDiff RNA-seq pipeline (FastAPI + SLURM orchestration)"
 
 # --- User configurable section ---
+# Install (read-only) directory root for this module
 set root          [file normalize [file join $ModulesCurrentModulefileDir .]]
+
+# Export install dir for backend to locate scripts/templates
 setenv EXPRESSDIFF_HOME $root
+
+# Expose CLI wrappers in PATH
 prepend-path PATH            $root/bin
+
+# Optional: define a default per-user work directory for persistence.
+# Users can override in their environment before loading the module:
+#   setenv EXPRESSDIFF_WORKDIR /scratch/$env(USER)/my_project
+if { [info exists ::env(SCRATCH)] } {
+    set scratch $::env(SCRATCH)
+    if { ![info exists ::env(EXPRESSDIFF_WORKDIR)] } {
+        setenv EXPRESSDIFF_WORKDIR "$scratch/ExpressDiff"
+    }
+} else {
+    if { ![info exists ::env(EXPRESSDIFF_WORKDIR)] } {
+        set home $::env(HOME)
+        setenv EXPRESSDIFF_WORKDIR "$home/ExpressDiff"
+    }
+}
 
 # Optional: load a baseline Python (cluster specific; adjust or remove)
 if { ![ info exists ::env(PYTHON_VERSION) ] } {

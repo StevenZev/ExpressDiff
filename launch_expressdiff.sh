@@ -8,13 +8,18 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "🧬 ExpressDiff RNA-seq Pipeline Launcher"
+# Load environment configuration (sets up scratch storage)
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    source "$SCRIPT_DIR/.env"
+fi
+
+echo "ExpressDiff RNA-seq Pipeline Launcher"
 echo "========================================"
 echo
 
 # Check if we're in a SLURM allocation
 if [[ -z "$SLURM_JOB_ID" ]]; then
-    echo "⚠️  You are not in a SLURM allocation. For best results, start an interactive session:"
+    echo "WARNING: You are not in a SLURM allocation. For best results, start an interactive session:"
     echo "   salloc -A <your_account> -p standard -c 4 --mem=16G -t 02:00:00"
     echo
     read -p "Continue anyway? (y/N): " -n 1 -r
@@ -25,68 +30,71 @@ if [[ -z "$SLURM_JOB_ID" ]]; then
 fi
 
 # Load required modules
-echo "📦 Loading modules..."
+echo "Loading modules..."
 if command -v module &> /dev/null; then
     # Load Python (try different versions)
     if module load python/3.10 2>/dev/null; then
-        echo "   ✓ Loaded Python 3.10"
+    echo "   Loaded Python 3.10"
     elif module load python/3.9 2>/dev/null; then
-        echo "   ✓ Loaded Python 3.9"
+    echo "   Loaded Python 3.9"
     elif module load python/3.8 2>/dev/null; then
-        echo "   ✓ Loaded Python 3.8"
+    echo "   Loaded Python 3.8"
     else
-        echo "   ⚠️  No Python 3.8+ module found, using system Python"
+    echo "   WARNING: No Python 3.8+ module found, using system Python"
     fi
     
     # Load Node.js
     if module load nodejs 2>/dev/null || module load nodejs/24.5.0 2>/dev/null; then
-        echo "   ✓ Loaded Node.js"
+    echo "   Loaded Node.js"
     else
-        echo "   ⚠️  Node.js module not found - frontend won't work"
+    echo "   WARNING: Node.js module not found - frontend won't work"
     fi
 else
-    echo "   ⚠️  Module system not available"
+    echo "   WARNING: Module system not available"
 fi
 
-# Setup Python environment
+# Offer to run the environment setup helper
 echo
-echo "🐍 Setting up Python environment..."
-if [[ ! -d "venv" ]]; then
-    echo "   Creating virtual environment..."
-    python -m venv venv
+echo "Environment setup"
+if [[ -x "$(pwd)/setup_env.sh" ]]; then
+    read -p "Run ./setup_env.sh to (re)create venv and install deps? (Y/n): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    echo "Running setup_env.sh..."
+        # Prefer invoking the script directly so it uses the current shell for activation
+        bash ./setup_env.sh
+        echo "Returned from setup_env.sh"
+    else
+    echo "Skipping setup_env.sh. If you haven't prepared the environment, servers may fail to start." 
+    fi
+else
+    echo "No setup_env.sh helper found; continuing with existing environment (if any)."
 fi
-
-echo "   Activating virtual environment..."
-source venv/bin/activate
-
-echo "   Installing/updating Python packages..."
-pip install -q --upgrade pip
-pip install -q -r requirements.txt
 
 # Setup frontend (if Node.js is available)
 if command -v npm &> /dev/null; then
     echo
-    echo "⚛️  Setting up frontend..."
+    echo "Setting up frontend..."
     cd frontend
     
     if [[ ! -d "node_modules" ]]; then
-        echo "   Installing Node.js packages (this may take a few minutes)..."
+    echo "   Installing Node.js packages (this may take a few minutes)..."
         npm install --silent
     else
-        echo "   Node.js packages already installed"
+    echo "   Node.js packages already installed"
     fi
     
     cd ..
 else
     echo
-    echo "⚠️  Skipping frontend setup (Node.js not available)"
+    echo "WARNING: Skipping frontend setup (Node.js not available)"
     echo "   You can access the API directly at http://localhost:8000/docs"
 fi
 
 # Get the current hostname (compute node)
 HOSTNAME=$(hostname)
 echo
-echo "🚀 Starting ExpressDiff..."
+echo "Starting ExpressDiff..."
 echo "   Backend will be available at: http://$HOSTNAME:8000"
 if command -v npm &> /dev/null; then
     echo "   Frontend will be available at: http://$HOSTNAME:3000"
@@ -96,8 +104,17 @@ echo
 # Function to start backend
 start_backend() {
     echo "Starting backend server..."
-    source venv/bin/activate
-    uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
+    # Activate venv if present
+    if [[ -f "venv/bin/activate" ]]; then
+        # shellcheck disable=SC1091
+        source venv/bin/activate
+        echo "   Activated venv at ./venv"
+    else
+        echo "   No venv found at ./venv — running with system Python"
+    fi
+
+    # Use the current Python interpreter to run uvicorn so the venv's python is used when active
+    python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 }
 
 # Function to start frontend

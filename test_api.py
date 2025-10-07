@@ -38,7 +38,7 @@ def test_endpoint(endpoint, method="GET", data=None):
 
 def main():
     """Test all endpoints systematically."""
-    print("🧪 ExpressDiff API Endpoint Testing")
+    print("ExpressDiff API Endpoint Testing")
     print("=" * 50)
     
     # Wait a moment for server to be ready
@@ -48,38 +48,38 @@ def main():
     print("\n1. Testing /health endpoint...")
     success, response = test_endpoint("/health")
     if success:
-        print("✅ Health check passed:")
+        print("Health check passed:")
         print(json.dumps(response, indent=2))
     else:
-        print(f"❌ Health check failed: {response}")
+        print(f"Health check failed: {response}")
         return False
     
     # Test 2: Get accounts
     print("\n2. Testing /accounts endpoint...")
     success, response = test_endpoint("/accounts")
     if success:
-        print("✅ Accounts endpoint passed:")
+        print("Accounts endpoint passed:")
         print(json.dumps(response, indent=2))
     else:
-        print(f"❌ Accounts endpoint failed: {response}")
+        print(f"Accounts endpoint failed: {response}")
     
     # Test 3: Get stages
     print("\n3. Testing /stages endpoint...")
     success, response = test_endpoint("/stages")
     if success:
-        print("✅ Stages endpoint passed:")
+        print("Stages endpoint passed:")
         print(json.dumps(response, indent=2))
     else:
-        print(f"❌ Stages endpoint failed: {response}")
+        print(f"Stages endpoint failed: {response}")
     
     # Test 4: List runs (should be empty initially)
     print("\n4. Testing /runs endpoint (list)...")
     success, response = test_endpoint("/runs")
     if success:
-        print("✅ List runs endpoint passed:")
+        print("List runs endpoint passed:")
         print(json.dumps(response, indent=2))
     else:
-        print(f"❌ List runs endpoint failed: {response}")
+        print(f"List runs endpoint failed: {response}")
     
     # Test 5: Create a test run
     print("\n5. Testing /runs endpoint (create)...")
@@ -91,19 +91,19 @@ def main():
     }
     success, response = test_endpoint("/runs", method="POST", data=test_run_data)
     if success:
-        print("✅ Create run endpoint passed:")
+        print("Create run endpoint passed:")
         print(json.dumps(response, indent=2))
         if isinstance(response, dict) and "run_id" in response:
             return response["run_id"]
     else:
-        print(f"❌ Create run endpoint failed: {response}")
+        print(f"Create run endpoint failed: {response}")
     
     return None
 
 if __name__ == "__main__":
     run_id = main()
     if run_id:
-        print(f"\n🎉 All basic tests passed! Created test run: {run_id}")
-        print(f"\n📁 Check the runs/{run_id}/ directory for created files.")
+        print(f"\nAll basic tests passed. Created test run: {run_id}")
+        print(f"\nCheck the runs/{run_id}/ directory for created files.")
     else:
-        print("\n❌ Some tests failed. Check the server logs for details.")
+        print("\nSome tests failed. Check the server logs for details.")

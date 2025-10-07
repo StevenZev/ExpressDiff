@@ -119,18 +119,16 @@ npm run build
 
 ---
 
-## 🧪 Testing
+## Testing
 
-### Manual Testing
+### Manual checks
 ```bash
-# Create test data
+# Create test data (optional)
 ./create_test_data.sh
 
-# Test API endpoints
-python test_api.py
-
-# Test backend components
-python test_backend.py
+# Quick API sanity checks
+curl http://localhost:8000/health
+curl http://localhost:8000/accounts
 ```
 
 ### Integration Testing
@@ -145,12 +143,12 @@ python test_backend.py
 # Health check
 curl http://localhost:8000/health
 
-# List accounts  
+# List accounts
 curl http://localhost:8000/accounts
 
 # Create run
 curl -X POST http://localhost:8000/runs -H "Content-Type: application/json" \
-  -d '{"name": "test_run", "account": "your_account"}'
+   -d '{"name": "test_run", "account": "your_account"}'
 ```
 
 ---

@@ -56,8 +56,8 @@ IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
         with open(raw_dir / filename, 'w') as f:
             f.write(fastq_content)
     
-    print(f"✓ Created test directory: {test_dir}")
-    print(f"✓ Created test files: {test_files}")
+    print(f"OK: Created test directory: {test_dir}")
+    print(f"OK: Created test files: {test_files}")
     
     # Generate script
     generator = SLURMScriptGenerator()
@@ -68,7 +68,7 @@ IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
         adapter_type="NexteraPE-PE"
     )
     
-    print(f"✓ Generated script: {script_path}")
+    print(f"OK: Generated script: {script_path}")
     
     # Show script content
     print("\n--- Generated Script Content ---")
@@ -89,7 +89,7 @@ IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
         )
         
         if success and job_id:
-            print(f"✓ Job submitted: {job_id}")
+            print(f"OK: Job submitted: {job_id}")
             print(f"Message: {message}")
             
             # Wait a bit and check status
@@ -120,10 +120,10 @@ IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
                 all_files = list(qc_dir.iterdir())
                 print(f"Files in {qc_dir}: {all_files}")
         else:
-            print(f"✗ Job submission failed: {message}")
+            print(f"FAIL: Job submission failed: {message}")
             
     except Exception as e:
-        print(f"✗ Error: {e}")
+        print(f"FAIL: Error: {e}")
     
     print(f"\nTest directory left intact for inspection: {test_dir}")
     print(f"To clean up later: rm -rf {test_dir}")
