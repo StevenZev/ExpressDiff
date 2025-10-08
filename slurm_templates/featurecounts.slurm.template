@@ -1,0 +1,175 @@
+#!/bin/bash
+#SBATCH --job-name=featureCounts_{RUN_ID}
+#SBATCH --time=01:00:00
+#SBATCH --partition=standard
+#SBATCH --account={ACCOUNT}
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=16G
+#SBATCH --output={BASE_DIR}/runs/{RUN_ID}/featurecounts/logs/featurecounts_%j.out
+#SBATCH --error={BASE_DIR}/runs/{RUN_ID}/featurecounts/logs/featurecounts_%j.err
+
+set -euo pipefail
+
+# Run-specific variables
+RUN_ID="{RUN_ID}"
+BASE_DIR="{BASE_DIR}"
+RUN_DIR="$BASE_DIR/runs/$RUN_ID"
+STAR_DIR="$RUN_DIR/star"
+COUNTS_DIR="$RUN_DIR/featurecounts"
+GENOME_DIR="$BASE_DIR/mapping_in"
+REFERENCE_DIR="$RUN_DIR/reference"
+
+echo "=== featureCounts for RNA-seq ==="
+echo "Run ID: $RUN_ID"
+echo "Base directory: $BASE_DIR"
+echo "Input directory: $STAR_DIR"
+echo "Output directory: $COUNTS_DIR"
+echo ""
+
+# Create necessary output directories
+mkdir -p "$COUNTS_DIR"
+
+# Clean up previous outputs for this run
+echo "Cleaning previous featureCounts output..."
+rm -f "$COUNTS_DIR"/* 2>/dev/null || true
+echo "  ✓ Cleanup complete"
+echo ""
+
+echo "Searching for reference files..."
+
+# Check for GTF file (first in run-specific, then in global)
+GTF=""
+
+if [ -d "$REFERENCE_DIR" ]; then
+    echo "  Checking run-specific reference: $REFERENCE_DIR"
+    GTF=$(find "$REFERENCE_DIR" -name "*.gtf" 2>/dev/null | head -n 1)
+    if [ -n "$GTF" ]; then
+        echo "    Found GTF: $(basename $GTF)"
+    fi
+fi
+
+if [ -z "$GTF" ] && [ -d "$GENOME_DIR" ]; then
+    echo "  Checking global reference: $GENOME_DIR"
+    GTF=$(find "$GENOME_DIR" -name "*.gtf" 2>/dev/null | head -n 1)
+    if [ -n "$GTF" ]; then
+        echo "    Found GTF: $(basename $GTF)"
+    fi
+fi
+
+if [ ! -f "$GTF" ]; then
+    echo "ERROR: No GTF file found."
+    echo "Checked: $REFERENCE_DIR and $GENOME_DIR"
+    exit 1
+fi
+
+echo ""
+echo "Using GTF: $GTF"
+echo ""
+echo ""
+
+# Check if BAM files exist
+echo "Checking for BAM files..."
+BAM_COUNT=$(find "$STAR_DIR" -name "*Aligned.sortedByCoord.out.bam" 2>/dev/null | wc -l)
+
+if [ "$BAM_COUNT" -eq 0 ]; then
+    echo "ERROR: No aligned BAM files found in $STAR_DIR"
+    exit 1
+fi
+
+echo "  Found $BAM_COUNT BAM files to process"
+echo ""
+
+# List BAM files
+echo "BAM files:"
+find "$STAR_DIR" -name "*Aligned.sortedByCoord.out.bam" | while read bam; do
+    echo "  - $(basename $bam)"
+done
+echo ""
+
+# Load required modules
+echo "Loading modules..."
+module load miniforge
+echo "  ✓ miniforge loaded"
+echo ""
+
+# Initialize conda for bash
+eval "$(conda shell.bash hook)"
+echo "  ✓ conda initialized"
+echo ""
+
+# Activate conda environment
+echo "Activating conda environment..."
+conda activate testenv || {
+    echo "ERROR: Could not activate testenv conda environment"
+    echo "Please ensure testenv exists with subread installed:"
+    echo "  conda create -n testenv"
+    echo "  conda activate testenv"
+    echo "  conda install -c bioconda subread"
+    exit 1
+}
+echo "  ✓ testenv activated"
+echo ""
+
+# Check if featureCounts is available
+if ! which featureCounts &>/dev/null; then
+    echo "ERROR: featureCounts not found in PATH"
+    echo "Please install subread in testenv:"
+    echo "  conda activate testenv"
+    echo "  conda install -c bioconda subread"
+    exit 1
+fi
+
+echo "  ✓ featureCounts found: $(which featureCounts)"
+featureCounts -v 2>&1 | head -1
+echo ""
+echo ""
+
+# Set default for SLURM variables (in case running outside SLURM)
+THREADS=${SLURM_CPUS_PER_TASK:-8}
+
+# Run featureCounts
+echo "=== Running featureCounts ==="
+echo "Threads: $THREADS"
+echo "Strandedness: reverse (stranded, -s 2)"
+echo "Feature type: exon"
+echo "Attribute: gene_id"
+echo "Paired-end mode: yes (-p)"
+echo "  Note: Use -p for real paired-end data. Remove for test data with no alignments."
+echo ""
+
+featureCounts \
+    -a "$GTF" \
+    -o "$COUNTS_DIR/counts.txt" \
+    -T $THREADS \
+    -t exon \
+    -g gene_id \
+    -p \
+    -s 2 \
+    $STAR_DIR/*Aligned.sortedByCoord.out.bam
+
+echo ""
+echo "=== featureCounts Summary ==="
+
+# Check if output file was created
+if [ -f "$COUNTS_DIR/counts.txt" ]; then
+    echo "  ✓ Counts file created: counts.txt"
+    GENE_COUNT=$(tail -n +2 "$COUNTS_DIR/counts.txt" | wc -l)
+    echo "  ✓ Genes counted: $GENE_COUNT"
+else
+    echo "  ✗ ERROR: counts.txt not created"
+    exit 1
+fi
+
+if [ -f "$COUNTS_DIR/counts.txt.summary" ]; then
+    echo "  ✓ Summary file created: counts.txt.summary"
+fi
+
+echo ""
+echo "Output files created in: $COUNTS_DIR"
+echo ""
+
+# Create completion flag
+touch "$COUNTS_DIR/featurecounts_done.flag"
+echo "✓ featureCounts complete for run $RUN_ID"

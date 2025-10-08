@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# ExpressDiff CLI wrapper for module-based deployments
+set -euo pipefail
+
+# Resolve install directory (read-only code location)
+if [[ -n "${EXPRESSDIFF_HOME:-}" ]]; then
+  INSTALL_DIR="${EXPRESSDIFF_HOME}"
+else
+  # Fallback: infer from this script location (../)
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  INSTALL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
+
+# Determine per-user work directory (writable, persistent)
+if [[ -n "${EXPRESSDIFF_WORKDIR:-}" ]]; then
+  WORKDIR="${EXPRESSDIFF_WORKDIR}"
+elif [[ -n "${SCRATCH:-}" ]]; then
+  WORKDIR="${SCRATCH}/ExpressDiff"
+else
+  WORKDIR="${HOME}/ExpressDiff"
+fi
+
+# Ensure baseline structure exists
+mkdir -p "${WORKDIR}" "${WORKDIR}/runs"
+export EXPRESSDIFF_WORKDIR="${WORKDIR}"
+
+# Helpful banner
+echo "ExpressDiff — install: ${INSTALL_DIR}"
+echo "Work directory: ${WORKDIR}"
+
+subcmd="${1:-run}"
+shift || true
+
+case "${subcmd}" in
+  launch|run)
+    # Launch combined backend/frontend helper
+    # 'run' is an alias for 'launch' for convenience
+    exec "${INSTALL_DIR}/launch_expressdiff.sh" "$@"
+    ;;
+  api)
+    # Start API-only launcher (port optional, default 8000)
+    exec "${INSTALL_DIR}/bin/expressdiff_api.sh" "${1:-8000}"
+    ;;
+  help|-h|--help)
+    cat <<EOF
+================================================================================
+ExpressDiff - RNA-seq Differential Expression Analysis Pipeline
+================================================================================
+
+ExpressDiff is an automated RNA-seq analysis pipeline that runs on HPC 
+infrastructure. The pipeline performs quality control, read trimming, genome 
+alignment, feature quantification, and differential expression analysis.
+
+FEATURES:
+  - FastAPI backend with React frontend
+  - SLURM job orchestration
+  - Quality control with FastQC and MultiQC
+  - Read trimming with Trimmomatic
+  - Alignment with STAR
+  - Quantification with featureCounts
+  - Differential expression with DESeq2
+
+Usage: ExpressDiff [command]
+
+Commands:
+  run            Start the ExpressDiff pipeline (backend + frontend)
+  launch         Start backend (and frontend if available) [alias for 'run']
+  api [PORT]     Start only the FastAPI backend on PORT (default: 8000)
+  help           Show this help message
+
+Environment:
+  EXPRESSDIFF_HOME     Install directory (set by module)
+  EXPRESSDIFF_WORKDIR  Per-user work dir (default: \$SCRATCH/ExpressDiff or \$HOME/ExpressDiff)
+
+Support:
+  For questions, issues, or assistance, contact: vth3bk@virginia.edu
+
+================================================================================
+EOF
+    ;;
+  *)
+    echo "Unknown command: ${subcmd}" >&2
+    echo "Try: ExpressDiff help" >&2
+    exit 1
+    ;;
+ esac

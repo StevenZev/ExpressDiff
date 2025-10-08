@@ -262,4 +262,9 @@ python -c "from backend.api.main import validate_samples; print(validate_samples
 - **SLURM Templates**: Comments in `.slurm.template` files
 - **Configuration**: Docstrings in `backend/core/config.py`
 
-For questions or contributions, see the project repository or contact the development team.
+---
+
+## 📧 Support & Contact
+
+For questions, issues, or development support, please contact:
+**vth3bk@virginia.edu**

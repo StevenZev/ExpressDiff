@@ -288,6 +288,8 @@ git push origin v2
 
 ## 📞 **Support**
 
+For questions, issues, or development assistance:
+- **ExpressDiff Application**: vth3bk@virginia.edu
 - **HPC Issues**: Contact UVA Research Computing
 - **Code Issues**: Check GitHub issues or create new ones
 - **SLURM Problems**: Verify account permissions and quota
@@ -583,5 +585,7 @@ scontrol show job $SLURM_JOB_ID
 **Need Help?** 
 - Check the main README.md for basic setup
 - Review error logs in terminal outputs
+- Contact: vth3bk@virginia.edu for ExpressDiff support
+
 - Ensure all dependencies are installed
 - Verify network connectivity and SSH access

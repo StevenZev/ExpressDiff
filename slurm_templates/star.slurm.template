@@ -1,0 +1,245 @@
+#!/bin/bash
+#SBATCH --job-name=STAR_{RUN_ID}
+#SBATCH --time=08:00:00
+#SBATCH --partition=standard
+#SBATCH --account={ACCOUNT}
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
+#SBATCH --output={BASE_DIR}/runs/{RUN_ID}/star/logs/star_%j.out
+#SBATCH --error={BASE_DIR}/runs/{RUN_ID}/star/logs/star_%j.err
+
+set -euo pipefail
+
+# Run-specific variables
+RUN_ID="{RUN_ID}"
+BASE_DIR="{BASE_DIR}"
+RUN_DIR="$BASE_DIR/runs/$RUN_ID"
+TRIMMED_DIR="$RUN_DIR/trimmed"
+STAR_DIR="$RUN_DIR/star"
+LOGS_DIR="$STAR_DIR/logs"
+GENOME_DIR="$BASE_DIR/mapping_in"
+REFERENCE_DIR="$RUN_DIR/reference"
+
+echo "=== STAR Alignment for RNA-seq ==="
+echo "Run ID: $RUN_ID"
+echo "Base directory: $BASE_DIR"
+echo "Input directory: $TRIMMED_DIR"
+echo "Output directory: $STAR_DIR"
+echo "Logs directory: $LOGS_DIR"
+echo ""
+
+# Create necessary output directories
+mkdir -p "$STAR_DIR"
+mkdir -p "$STAR_DIR/genome_index"
+mkdir -p "$LOGS_DIR"
+
+# Clean up any previous output (keeping logs directory)
+echo "Cleaning previous STAR output files..."
+rm -f "$STAR_DIR"/*.bam "$STAR_DIR"/*.tab "$STAR_DIR"/*_STARtmp 2>/dev/null || true
+rm -f "$STAR_DIR"/*.out "$STAR_DIR"/*.out.tab 2>/dev/null || true
+rm -f "$STAR_DIR"/star_done.flag 2>/dev/null || true
+echo "  ✓ Cleanup complete"
+echo ""
+
+# Load required modules
+module load star
+module load parallel
+
+echo "Loading modules..."
+echo "  STAR version: $(STAR --version)"
+echo "  Parallel installed: $(which parallel)"
+echo ""
+
+# Check for reference files (first in run-specific, then in global)
+echo "Searching for reference files..."
+FASTA=""
+GTF=""
+
+if [ -d "$REFERENCE_DIR" ]; then
+    echo "  Checking run-specific reference: $REFERENCE_DIR"
+    FASTA=$(find "$REFERENCE_DIR" -name "*.fa" -o -name "*.fasta" 2>/dev/null | head -n 1)
+    GTF=$(find "$REFERENCE_DIR" -name "*.gtf" 2>/dev/null | head -n 1)
+    if [ -n "$FASTA" ]; then
+        echo "    Found FASTA: $(basename $FASTA)"
+    fi
+    if [ -n "$GTF" ]; then
+        echo "    Found GTF: $(basename $GTF)"
+    fi
+fi
+
+if [ -z "$FASTA" ] || [ -z "$GTF" ]; then
+    echo "  Checking global reference: $GENOME_DIR"
+    if [ -d "$GENOME_DIR" ]; then
+        if [ -z "$FASTA" ]; then
+            FASTA=$(find "$GENOME_DIR" -name "*.fa" -o -name "*.fasta" 2>/dev/null | head -n 1)
+            if [ -n "$FASTA" ]; then
+                echo "    Found FASTA: $(basename $FASTA)"
+            fi
+        fi
+        if [ -z "$GTF" ]; then
+            GTF=$(find "$GENOME_DIR" -name "*.gtf" 2>/dev/null | head -n 1)
+            if [ -n "$GTF" ]; then
+                echo "    Found GTF: $(basename $GTF)"
+            fi
+        fi
+    fi
+fi
+
+if [ -z "$FASTA" ] || [ -z "$GTF" ]; then
+    echo "ERROR: Missing reference files"
+    echo "  FASTA: ${FASTA:-NOT FOUND}"
+    echo "  GTF: ${GTF:-NOT FOUND}"
+    echo "Searched directories:"
+    echo "  - $REFERENCE_DIR"
+    echo "  - $GENOME_DIR"
+    exit 1
+fi
+
+echo ""
+echo "Using reference files:"
+echo "  FASTA: $FASTA"
+echo "  GTF: $GTF"
+echo ""
+
+# Check if trimmed files exist
+echo "Checking for trimmed FASTQ files..."
+if [ ! -d "$TRIMMED_DIR" ]; then
+    echo "ERROR: Trimmed directory not found: $TRIMMED_DIR"
+    exit 1
+fi
+
+FORWARD_FILES=$(find "$TRIMMED_DIR" -name "*_forward_paired.fq.gz" 2>/dev/null | wc -l)
+REVERSE_FILES=$(find "$TRIMMED_DIR" -name "*_reverse_paired.fq.gz" 2>/dev/null | wc -l)
+
+echo "  Forward paired files: $FORWARD_FILES"
+echo "  Reverse paired files: $REVERSE_FILES"
+
+if [ "$FORWARD_FILES" -eq 0 ]; then
+    echo "ERROR: No forward paired FASTQ files found in $TRIMMED_DIR"
+    ls -la "$TRIMMED_DIR" || true
+    exit 1
+fi
+
+if [ "$FORWARD_FILES" -ne "$REVERSE_FILES" ]; then
+    echo "WARNING: Mismatch in forward ($FORWARD_FILES) and reverse ($REVERSE_FILES) file counts"
+fi
+
+echo ""
+echo "Found trimmed files:"
+find "$TRIMMED_DIR" -name "*_forward_paired.fq.gz" | while read f; do
+    echo "  $(basename $f)"
+done
+echo ""
+
+# Build genome index if it doesn't exist
+STAR_INDEX="$STAR_DIR/genome_index"
+echo "Checking for STAR genome index..."
+if [ ! -f "$STAR_INDEX/SA" ]; then
+    echo "  Index not found, building now..."
+    echo "  This may take several minutes for large genomes"
+    echo "  Threads: $SLURM_CPUS_PER_TASK"
+    echo ""
+    
+    STAR --runThreadN $SLURM_CPUS_PER_TASK \
+         --runMode genomeGenerate \
+         --genomeDir "$STAR_INDEX" \
+         --genomeFastaFiles "$FASTA" \
+         --sjdbGTFfile "$GTF" \
+         --sjdbOverhang 99 \
+         2>&1 | tee "$LOGS_DIR/genome_index_build.log"
+    
+    echo ""
+    echo "✓ Genome index built successfully"
+else
+    echo "  ✓ Existing index found, skipping build"
+fi
+echo ""
+
+# Run STAR alignment in sequential loop
+echo "=== Starting STAR alignment ==="
+echo "Threads per alignment: 2"
+echo ""
+
+SUCCESS_COUNT=0
+FAIL_COUNT=0
+TOTAL_COUNT=$(find "$TRIMMED_DIR" -name "*_forward_paired.fq.gz" | wc -l)
+
+echo "Found $TOTAL_COUNT samples to process"
+echo ""
+
+# Process each sample sequentially
+for fwd_file in $(find "$TRIMMED_DIR" -name "*_forward_paired.fq.gz" | sort); do
+    basename=$(basename "$fwd_file" _forward_paired.fq.gz)
+    rev_file="$TRIMMED_DIR/${basename}_reverse_paired.fq.gz"
+    log_prefix="$LOGS_DIR/${basename}"
+    
+    echo "=== Aligning sample: $basename ==="
+    echo "  Forward: $(basename $fwd_file)"
+    echo "  Reverse: $(basename $rev_file)"
+    
+    if [ ! -f "$rev_file" ]; then
+        echo "  ERROR: Reverse file not found: $rev_file"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        echo "Progress: $SUCCESS_COUNT successful, $FAIL_COUNT failed, $(($SUCCESS_COUNT + $FAIL_COUNT))/$TOTAL_COUNT processed"
+        continue
+    fi
+    
+    # Run STAR alignment - use set +e temporarily to capture exit code
+    set +e
+    STAR --runThreadN 2 \
+         --genomeDir "$STAR_INDEX" \
+         --readFilesIn "$fwd_file" "$rev_file" \
+         --readFilesCommand zcat \
+         --outFileNamePrefix "$STAR_DIR/${basename}_" \
+         --outSAMtype BAM SortedByCoordinate \
+         --quantMode GeneCounts \
+         --outReadsUnmapped Fastx \
+         2>&1 | tee "${log_prefix}_alignment.log"
+    star_exit=$?
+    set -e
+    
+    if [ $star_exit -eq 0 ]; then
+        echo "  ✓ Alignment complete for $basename"
+        SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+        echo "Progress: $SUCCESS_COUNT/$TOTAL_COUNT samples completed"
+    else
+        echo "  ✗ Alignment failed for $basename (exit code: $star_exit)"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        echo "Progress: $SUCCESS_COUNT successful, $FAIL_COUNT failed, $(($SUCCESS_COUNT + $FAIL_COUNT))/$TOTAL_COUNT processed"
+    fi
+    echo ""
+done
+
+echo "=== Alignment Summary ==="
+echo "Successful: $SUCCESS_COUNT"
+echo "Failed: $FAIL_COUNT"
+echo ""
+
+if [ "$FAIL_COUNT" -gt 0 ]; then
+    echo "WARNING: Some alignments failed"
+    echo "Check individual sample logs in: $LOGS_DIR"
+fi
+
+# Check output files were created
+echo "Checking output files..."
+BAM_COUNT=$(ls "$STAR_DIR"/*_Aligned.sortedByCoord.out.bam 2>/dev/null | wc -l)
+COUNT_COUNT=$(ls "$STAR_DIR"/*_ReadsPerGene.out.tab 2>/dev/null | wc -l)
+
+echo "  BAM files: $BAM_COUNT"
+echo "  Count files: $COUNT_COUNT"
+
+if [ "$BAM_COUNT" -eq 0 ]; then
+    echo "ERROR: No BAM files were created"
+    exit 1
+fi
+
+echo ""
+echo "Output files created in: $STAR_DIR"
+echo "Logs saved in: $LOGS_DIR"
+
+# Create completion flag
+touch "$STAR_DIR/star_alignment_done.flag"
+echo ""
+echo "✓ STAR alignment complete for run $RUN_ID"

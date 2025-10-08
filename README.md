@@ -3,14 +3,23 @@ Differential Analysis Pipeline for RNA-Seq Data
 
 ## 🚀 Quick Start with FastX Desktop
 
-### 1. Start Interactive Session
+### Option A: Using Module (Recommended)
 ```bash
 # Get an interactive allocation
 salloc -A <your_account> -p standard -c 4 --mem=16G -t 02:00:00
+
+# Load the module
+module load ExpressDiff
+
+# Start the pipeline
+ExpressDiff run
 ```
 
-### 2. Launch ExpressDiff
+### Option B: Direct Clone and Launch
 ```bash
+# Get an interactive allocation
+salloc -A <your_account> -p standard -c 4 --mem=16G -t 02:00:00
+
 # Clone and start (first time)
 git clone https://github.com/StevenZev/ExpressDiff.git
 cd ExpressDiff
@@ -19,13 +28,14 @@ cd ExpressDiff
 ./launch_expressdiff.sh
 ```
 
-### 3. Access in FastX Browser
+### Access in FastX Browser
 - **Frontend**: http://localhost:3000 (full UI)  
 - **API docs**: http://localhost:8000/docs (backend only)
 
-### 4. Test with Sample Data
+### Test with Sample Data
 ```bash
 # Generate test files
+cd test_data_generators
 ./create_test_data.sh
 
 # Then upload files from test_data/ folder in the UI
@@ -338,14 +348,29 @@ Reload module cache if required by your environment (e.g. `module refresh`).
 ### 3. User Workflow
 
 ```bash
+# Load the module
 module load ExpressDiff
-expressdiff_api.sh 8000   # or omit port (defaults 8000)
+
+# View help and available commands
+ExpressDiff help
+
+# Start the pipeline (launches backend + frontend)
+ExpressDiff run
+
+# Or start only the API backend on a specific port
+ExpressDiff api 8000
 ```
 
-The script will:
-1. Create `.venv` if missing
-2. Install Python requirements
-3. Launch Uvicorn on the chosen port
+The `ExpressDiff run` command will:
+1. Display install and work directories
+2. Launch the backend API server
+3. Launch the frontend (if available)
+4. Provide access URLs for the web interface
+
+Alternatively, use the legacy direct script:
+```bash
+expressdiff_api.sh 8000   # API only (defaults to port 8000)
+```
 
 ### 4. SSH Tunnel (From Local Machine)
 
@@ -373,3 +398,11 @@ Set `REACT_APP_API_BASE` (or edit `frontend/src/api/client.ts`) if you need a cu
 - Add health/status log path export (e.g. `EXPRESSDIFF_RUNLOG`).
 
 ---
+
+## 📧 Support
+
+For questions, issues, or support requests, please contact:
+**vth3bk@virginia.edu**
+
+---
+
