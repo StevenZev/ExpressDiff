@@ -3,7 +3,9 @@
 set -euo pipefail
 
 # Resolve install directory (read-only code location)
-if [[ -n "${EXPRESSDIFF_HOME:-}" ]]; then
+if [[ -n "${EBROOTEXPRESSDIFF:-}" ]]; then
+  INSTALL_DIR="${EBROOTEXPRESSDIFF}"
+elif [[ -n "${EXPRESSDIFF_HOME:-}" ]]; then
   INSTALL_DIR="${EXPRESSDIFF_HOME}"
 else
   # Fallback: infer from this script location (../)
@@ -11,35 +13,74 @@ else
   INSTALL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 fi
 
-# Determine per-user work directory (writable, persistent)
-if [[ -n "${EXPRESSDIFF_WORKDIR:-}" ]]; then
-  WORKDIR="${EXPRESSDIFF_WORKDIR}"
-elif [[ -n "${SCRATCH:-}" ]]; then
-  WORKDIR="${SCRATCH}/ExpressDiff"
-else
-  WORKDIR="${HOME}/ExpressDiff"
-fi
-
-# Ensure baseline structure exists
-mkdir -p "${WORKDIR}" "${WORKDIR}/runs"
-export EXPRESSDIFF_WORKDIR="${WORKDIR}"
-
-# Helpful banner
-echo "ExpressDiff — install: ${INSTALL_DIR}"
-echo "Work directory: ${WORKDIR}"
-
 subcmd="${1:-run}"
 shift || true
 
 case "${subcmd}" in
-  launch|run)
-    # Launch combined backend/frontend helper
-    # 'run' is an alias for 'launch' for convenience
+  launch)
+    # Original interactive launcher (backend only, frontend only, or both)
+    # Determine or set work directory before launching
+    if [[ -z "${EXPRESSDIFF_WORKDIR:-}" ]]; then
+      if [[ -n "${SCRATCH:-}" ]]; then
+        WORKDIR="${SCRATCH}/ExpressDiff"
+      else
+        echo "ERROR: No work directory configured." >&2
+        echo "Set EXPRESSDIFF_WORKDIR or SCRATCH to a writable location (e.g., /scratch/$USER)." >&2
+        exit 1
+      fi
+      export EXPRESSDIFF_WORKDIR="${WORKDIR}"
+    else
+      WORKDIR="${EXPRESSDIFF_WORKDIR}"
+    fi
+    mkdir -p "${WORKDIR}" "${WORKDIR}/runs"
+    echo "ExpressDiff — install: ${INSTALL_DIR}"
+    echo "Work directory: ${WORKDIR}"
     exec "${INSTALL_DIR}/launch_expressdiff.sh" "$@"
+    ;;
+  run)
+    # New development-friendly run flow: prompt, create ./ExpressDiff workdir, then start backend
+    echo "[ExpressDiff] Recommendation: run from /scratch/$USER to avoid filling limited home space." >&2
+    echo "[ExpressDiff] Current directory: $PWD" >&2
+    echo >&2
+    read -r -p "Create ./ExpressDiff working directory here and continue? (y/N): " REPLY
+    if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+      echo "Cancelled. Please re-run from /scratch/$USER for best results." >&2
+      exit 1
+    fi
+
+    WORKDIR="$PWD/ExpressDiff"
+    mkdir -p "$WORKDIR" "$WORKDIR/runs" "$WORKDIR/mapping_in"
+    export EXPRESSDIFF_WORKDIR="$WORKDIR"
+    echo "[ExpressDiff] Working directory set to: $EXPRESSDIFF_WORKDIR" >&2
+
+    LAUNCHER_BIN="${INSTALL_DIR}/bin/expressdiff_module_api.sh"
+    if [[ ! -x "$LAUNCHER_BIN" ]]; then
+      echo "ERROR: Backend launcher not found: $LAUNCHER_BIN" >&2
+      exit 1
+    fi
+    "$LAUNCHER_BIN" --host 0.0.0.0 --port 8000 --background
+    echo "[ExpressDiff] Backend starting on http://0.0.0.0:8000" >&2
+    echo "[ExpressDiff] Logs: $EXPRESSDIFF_WORKDIR/backend.log" >&2
+    echo "[ExpressDiff] API docs: http://0.0.0.0:8000/docs" >&2
     ;;
   api)
     # Start API-only launcher (port optional, default 8000)
-    exec "${INSTALL_DIR}/bin/expressdiff_api.sh" "${1:-8000}"
+    # Determine or set work directory before starting API
+    if [[ -z "${EXPRESSDIFF_WORKDIR:-}" ]]; then
+      if [[ -n "${SCRATCH:-}" ]]; then
+        WORKDIR="${SCRATCH}/ExpressDiff"
+      else
+        echo "ERROR: No work directory configured." >&2
+        echo "Set EXPRESSDIFF_WORKDIR or SCRATCH to a writable location (e.g., /scratch/$USER)." >&2
+        exit 1
+      fi
+      export EXPRESSDIFF_WORKDIR="${WORKDIR}"
+    else
+      WORKDIR="${EXPRESSDIFF_WORKDIR}"
+    fi
+    mkdir -p "${WORKDIR}" "${WORKDIR}/runs"
+    cd "${INSTALL_DIR}"
+    exec python -m uvicorn backend.api.main:app --host 0.0.0.0 --port "${1:-8000}"
     ;;
   help|-h|--help)
     cat <<EOF
@@ -63,14 +104,15 @@ FEATURES:
 Usage: ExpressDiff [command]
 
 Commands:
-  run            Start the ExpressDiff pipeline (backend + frontend)
-  launch         Start backend (and frontend if available) [alias for 'run']
+  run            Prompt to create ./ExpressDiff here; start backend using this directory
+  launch         Original interactive launcher (backend/frontend chooser)
   api [PORT]     Start only the FastAPI backend on PORT (default: 8000)
   help           Show this help message
 
 Environment:
-  EXPRESSDIFF_HOME     Install directory (set by module)
-  EXPRESSDIFF_WORKDIR  Per-user work dir (default: \$SCRATCH/ExpressDiff or \$HOME/ExpressDiff)
+  EBROOTEXPRESSDIFF    Install directory provided by EasyBuild module
+  EXPRESSDIFF_HOME     Install directory (fallback if EBROOT not set)
+  EXPRESSDIFF_WORKDIR  Work dir override (for development). Otherwise derived from \$SCRATCH.
 
 Support:
   For questions, issues, or assistance, contact: vth3bk@virginia.edu

@@ -12,24 +12,39 @@ The data is small enough to run quickly (~5-10 min) but realistic enough to show
 - Successful alignment
 - Gene counts
 - Statistically significant differential expression
+\n+Enhancements in this version:
+- CLI options for output location, read depth, number of genes/replicates, and seed
+- Outputs into ../test_data by default to match repo conventions
+- Exact per-sample read allocation using largest-remainder method
+- Emits a simple metadata.csv describing sample conditions
 """
 
+import argparse
+import csv
 import random
 import gzip
 from pathlib import Path
 
-# Set random seed for reproducibility
-random.seed(42)
+# Random seed is set from CLI (default 42)
 
-# Configuration
+# Configuration (can be overridden by CLI)
 NUM_GENES = 100
 GENE_LENGTH = 1000  # Base pairs per gene
 EXONS_PER_GENE = 3
 EXON_LENGTH = 200
 INTRON_LENGTH = 200
-READS_PER_SAMPLE = 50000  # 50K reads per sample
+READS_PER_SAMPLE = 50000  # 50K read pairs per sample
 READ_LENGTH = 75
 NUM_REPLICATES = 3  # 3 replicates per condition
+
+# Adapter contamination (can be overridden by CLI)
+ADAPTER_RATE = 0.1          # Fraction of read pairs to contaminate with adapters
+ADAPTER_MAX_LEN = 25        # Max length of adapter sequence to insert at 3' end
+
+# Common Illumina TruSeq3-PE-2 adapter sequences (5'->3') used by truseq3-pe-2
+# These are standard sequences used by trimmers like Trimmomatic
+ADAPTER_R1_SEQ = "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC"
+ADAPTER_R2_SEQ = "AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT"
 
 # Chromosomes
 CHROMOSOMES = ['chr1', 'chr2', 'chr3']
@@ -59,6 +74,38 @@ def mutate_sequence(seq, error_rate=0.01):
         if random.random() < error_rate:
             seq_list[i] = random.choice('ACGT')
     return ''.join(seq_list)
+
+def allocate_reads(expression_profile: dict, total_reads: int) -> dict:
+    """Allocate exactly total_reads across genes using largest-remainder method.
+
+    Returns a dict {gene_id: count} where sum(counts) == total_reads.
+    """
+    if not expression_profile:
+        return {}
+    # Ensure positive weights
+    weights = {g: max(0.0, float(w)) for g, w in expression_profile.items()}
+    total_w = sum(weights.values())
+    if total_w <= 0:
+        # uniform fallback
+        n = len(weights)
+        base = total_reads // max(1, n)
+        counts = {g: base for g in weights}
+        rem = total_reads - base * max(1, n)
+        for g in list(weights.keys())[:rem]:
+            counts[g] += 1
+        return counts
+
+    # Raw proportional shares
+    raw = {g: (w / total_w) * total_reads for g, w in weights.items()}
+    counts = {g: int(v) for g, v in raw.items()}
+    assigned = sum(counts.values())
+    rem = total_reads - assigned
+    if rem > 0:
+        # Distribute remainder to largest fractional parts
+        order = sorted(((g, raw[g] - counts[g]) for g in weights), key=lambda x: x[1], reverse=True)
+        for i in range(rem):
+            counts[order[i % len(order)][0]] += 1
+    return counts
 
 class Gene:
     """Represents a gene with exons and introns."""
@@ -195,7 +242,17 @@ def generate_reads_from_gene(gene, num_reads, condition='control'):
             read1 = reverse_complement(exon_seq[frag_start + READ_LENGTH:frag_start + 2 * READ_LENGTH])
             read2 = exon_seq[frag_start:frag_start + READ_LENGTH]
         
-        # Add sequencing errors
+        # Optionally append adapter contamination to the 3' end
+        if random.random() < ADAPTER_RATE:
+            # Random adapter length between 6 and ADAPTER_MAX_LEN (bounded by READ_LENGTH)
+            max_len = min(ADAPTER_MAX_LEN, READ_LENGTH)
+            if max_len >= 6:
+                a_len1 = random.randint(6, max_len)
+                a_len2 = random.randint(6, max_len)
+                read1 = read1[:-a_len1] + ADAPTER_R1_SEQ[:a_len1]
+                read2 = read2[:-a_len2] + ADAPTER_R2_SEQ[:a_len2]
+
+        # Add sequencing errors (after potential adapter insertion)
         read1 = mutate_sequence(read1, error_rate=0.005)
         read2 = mutate_sequence(read2, error_rate=0.005)
         
@@ -211,16 +268,12 @@ def generate_sample(genes, sample_name, output_dir, expression_profile):
     all_reads_r1 = []
     all_reads_r2 = []
     
+    # Add biological variation per gene and allocate exact read pairs
+    varied = {g.gene_id: expression_profile.get(g.gene_id, 1.0) * random.uniform(0.8, 1.2) for g in genes}
+    reads_per_gene = allocate_reads(varied, READS_PER_SAMPLE)
+
     for gene in genes:
-        # Get expression level for this gene
-        base_expression = expression_profile.get(gene.gene_id, 1.0)
-        
-        # Add biological variation
-        expression = base_expression * random.uniform(0.8, 1.2)
-        
-        # Convert expression to read count (proportional)
-        num_reads = int(READS_PER_SAMPLE * expression / sum(expression_profile.values()))
-        
+        num_reads = reads_per_gene.get(gene.gene_id, 0)
         # Generate reads
         reads = generate_reads_from_gene(gene, num_reads)
         for r1, r2 in reads:
@@ -253,7 +306,7 @@ def generate_sample(genes, sample_name, output_dir, expression_profile):
     print(f"✓ Generated {sample_name}: {len(all_reads_r1)} read pairs")
     return fq1_path, fq2_path
 
-def main():
+def main(args):
     """Main function to generate demo data."""
     print("=" * 60)
     print("ExpressDiff Demo Data Generator")
@@ -285,7 +338,7 @@ def main():
     
     # Generate reference genome
     print("Step 2: Generating reference genome...")
-    ref_dir = Path("demo_reference")
+    ref_dir = args.out / "demo_reference"
     fasta_path, gtf_path = generate_reference_genome(genes, ref_dir)
     print()
     
@@ -319,7 +372,9 @@ def main():
     
     # Generate samples
     print("Step 4: Generating RNA-seq samples...")
-    demo_dir = Path("demo_data")
+    print(f"  - Adapter contamination rate: {ADAPTER_RATE*100:.1f}% of pairs")
+    print(f"  - Adapter max length: {ADAPTER_MAX_LEN} nt")
+    demo_dir = args.out / "demo_data"
     
     # Control samples
     for i in range(NUM_REPLICATES):
@@ -330,6 +385,17 @@ def main():
     for i in range(NUM_REPLICATES):
         sample_name = f"treatment_{i+1}"
         generate_sample(genes, sample_name, demo_dir, treatment_expression)
+
+    # Write metadata.csv
+    demo_dir.mkdir(parents=True, exist_ok=True)
+    metadata_path = demo_dir / "metadata.csv"
+    with open(metadata_path, "w", newline="") as mf:
+        writer = csv.writer(mf)
+        writer.writerow(["sample", "condition", "replicate"])
+        for i in range(NUM_REPLICATES):
+            writer.writerow([f"control_{i+1}", "control", i + 1])
+        for i in range(NUM_REPLICATES):
+            writer.writerow([f"treatment_{i+1}", "treatment", i + 1])
     
     print()
     print("=" * 60)
@@ -341,12 +407,11 @@ def main():
     print(f"    - demo_genome.fa")
     print(f"    - demo_annotation.gtf")
     print(f"  Samples: {demo_dir}/")
-    print(f"    - control_1_1.fq.gz, control_1_2.fq.gz")
-    print(f"    - control_2_1.fq.gz, control_2_2.fq.gz")
-    print(f"    - control_3_1.fq.gz, control_3_2.fq.gz")
-    print(f"    - treatment_1_1.fq.gz, treatment_1_2.fq.gz")
-    print(f"    - treatment_2_1.fq.gz, treatment_2_2.fq.gz")
-    print(f"    - treatment_3_1.fq.gz, treatment_3_2.fq.gz")
+    for i in range(NUM_REPLICATES):
+        print(f"    - control_{i+1}_1.fq.gz, control_{i+1}_2.fq.gz")
+    for i in range(NUM_REPLICATES):
+        print(f"    - treatment_{i+1}_1.fq.gz, treatment_{i+1}_2.fq.gz")
+    print(f"  Metadata: {metadata_path}")
     print()
     print("Expected pipeline runtime: ~5-10 minutes")
     print("Expected differential expression: ~20 genes (10 up, 10 down)")
@@ -355,8 +420,31 @@ def main():
     print("  1. Upload the 6 FASTQ files (3 control + 3 treatment)")
     print("  2. Upload demo_genome.fa and demo_annotation.gtf as reference")
     print("  3. Run the full pipeline")
-    print("  4. Expect ~40-50% alignment rate")
+    print("  4. Expect high alignment rates with STAR (splice-aware)")
     print("  5. DESeq2 should detect ~20 differentially expressed genes")
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generate synthetic RNA-seq demo data for ExpressDiff")
+    script_dir = Path(__file__).resolve().parent
+    default_out = (script_dir.parent / "test_data").resolve()
+    parser.add_argument("--out", type=Path, default=default_out, help="Base output directory (default: ../test_data)")
+    parser.add_argument("--genes", type=int, default=NUM_GENES, help="Number of genes to simulate (default: 100)")
+    parser.add_argument("--replicates", type=int, default=NUM_REPLICATES, help="Replicates per condition (default: 3)")
+    parser.add_argument("--reads-per-sample", type=int, default=READS_PER_SAMPLE, help="Read pairs per sample (default: 50000)")
+    parser.add_argument("--read-length", type=int, default=READ_LENGTH, help="Read length (default: 75)")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    parser.add_argument("--adapter-rate", type=float, default=ADAPTER_RATE, help="Fraction of read pairs to contaminate with adapters (default: 0.1)")
+    parser.add_argument("--adapter-max-len", type=int, default=ADAPTER_MAX_LEN, help="Max adapter length to append at 3' (default: 25)")
+    return parser.parse_args()
+
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    # Override defaults from CLI
+    NUM_GENES = args.genes
+    NUM_REPLICATES = args.replicates
+    READS_PER_SAMPLE = args.reads_per_sample
+    READ_LENGTH = args.read_length
+    ADAPTER_RATE = args.adapter_rate
+    ADAPTER_MAX_LEN = args.adapter_max_len
+    random.seed(args.seed)
+    main(args)

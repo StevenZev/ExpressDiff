@@ -20,7 +20,7 @@ echo ""
 echo "Creating metadata.csv..."
 
 cat > metadata.csv << 'METADATA'
-sample_name,condition
+sample,condition
 control_1,control
 control_2,control
 control_3,control

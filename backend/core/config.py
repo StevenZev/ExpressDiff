@@ -11,33 +11,43 @@ class Config:
     """Application configuration.
 
     In module-based deployments, code is installed in a shared, read-only
-    location ("install dir"), while user data (runs, uploads, results) should
-    live in a per-user writable "work dir" that persists across sessions.
+    location ("install dir"), while user data (runs, uploads, results) must
+    live in a per-user writable work directory on scratch storage.
 
-    Install dir is detected from EXPRESSDIFF_HOME (set by modulefile) or by
-    walking up from this file. Work dir is configurable via EXPRESSDIFF_WORKDIR;
-    if not set, defaults to $SCRATCH/ExpressDiff when SCRATCH exists, otherwise
-    $HOME/ExpressDiff.
+    Install dir is detected from EBROOTEXPRESSDIFF/EXPRESSDIFF_HOME or by
+    walking up from this file. The work directory should be on the cluster
+    scratch for the user: $SCRATCH (i.e., /scratch/$USER). For development
+    convenience, if EXPRESSDIFF_WORKDIR is explicitly set, it will be used.
+    No $HOME automatic fallback is allowed.
     """
 
     # Install (read-only) directory containing code, templates, and scripts
-    INSTALL_DIR = Path(os.environ.get(
-        "EXPRESSDIFF_HOME",
-        Path(__file__).resolve().parents[2]  # repo root when run from source
-    ))
+    # Prefer EasyBuild-provided root when available
+    INSTALL_DIR = Path(
+        os.environ.get(
+            "EBROOTEXPRESSDIFF",
+            os.environ.get(
+                "EXPRESSDIFF_HOME",
+                str(Path(__file__).resolve().parents[2])  # repo root when run from source
+            ),
+        )
+    )
 
     @staticmethod
     def _default_workdir() -> Path:
-        # 1) Respect explicit override
+        # 1) Explicit override for development (use with caution)
         env = os.environ.get("EXPRESSDIFF_WORKDIR")
         if env:
             return Path(env)
-        # 2) Prefer site scratch if available
+        # 2) Preferred: cluster scratch
         scratch = os.environ.get("SCRATCH")
         if scratch:
-            return Path(scratch) / "ExpressDiff"
-        # 3) Fallback to home directory
-        return Path.home() / "ExpressDiff"
+            return Path(scratch)
+        # 3) No default fallback; force correct environment
+        raise RuntimeError(
+            "Work directory is not configured. Set EXPRESSDIFF_WORKDIR explicitly or ensure SCRATCH is set "
+            "(preferred /scratch/$USER). No $HOME fallback is allowed."
+        )
 
     # Per-user working directory for all run data
     BASE_DIR = _default_workdir.__func__()  # call without instance

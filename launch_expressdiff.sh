@@ -53,42 +53,13 @@ else
     echo "   WARNING: Module system not available"
 fi
 
-# Offer to run the environment setup helper
+# Skip any installation; rely on pre-installed environment
 echo
 echo "Environment setup"
-if [[ -x "$(pwd)/setup_env.sh" ]]; then
-    read -p "Run ./setup_env.sh to (re)create venv and install deps? (Y/n): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-    echo "Running setup_env.sh..."
-        # Prefer invoking the script directly so it uses the current shell for activation
-        bash ./setup_env.sh
-        echo "Returned from setup_env.sh"
-    else
-    echo "Skipping setup_env.sh. If you haven't prepared the environment, servers may fail to start." 
-    fi
-else
-    echo "No setup_env.sh helper found; continuing with existing environment (if any)."
-fi
-
-# Setup frontend (if Node.js is available)
-if command -v npm &> /dev/null; then
-    echo
-    echo "Setting up frontend..."
-    cd frontend
-    
-    if [[ ! -d "node_modules" ]]; then
-    echo "   Installing Node.js packages (this may take a few minutes)..."
-        npm install --silent
-    else
-    echo "   Node.js packages already installed"
-    fi
-    
-    cd ..
-else
-    echo
-    echo "WARNING: Skipping frontend setup (Node.js not available)"
-    echo "   You can access the API directly at http://localhost:8000/docs"
+echo "Using existing environment (no installations will be performed)."
+if ! command -v npm &> /dev/null; then
+    echo "WARNING: Node.js not available; frontend won't be started."
+    echo "You can access the API directly at: http://localhost:8000/docs"
 fi
 
 # Get the current hostname (compute node)

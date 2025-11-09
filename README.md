@@ -15,6 +15,14 @@ module load ExpressDiff
 ExpressDiff run
 ```
 
+#### Module-friendly backend launcher (no installs)
+If you only want the API backend and your module already provides dependencies, use:
+```bash
+# Uses EBROOTEXPRESSDIFF as install root; work dir is always $SCRATCH (i.e., /scratch/$USER)
+bin/expressdiff_module_api.sh --port 8000 --host 0.0.0.0 --background
+```
+This script avoids creating a venv or running pip install; it will print Python diagnostics and log to $SCRATCH/backend.log when run with --background.
+
 ### Option B: Direct Clone and Launch
 ```bash
 # Get an interactive allocation

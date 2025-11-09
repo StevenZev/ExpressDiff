@@ -39,13 +39,21 @@ python create_test_reference.py
 
 **Usage**:
 ```bash
-python create_demo_data.py
+python create_demo_data.py [--out ../test_data] [--genes 100] [--replicates 3] [--reads-per-sample 50000] [--read-length 75] [--seed 42]
+	[--adapter-rate 0.1] [--adapter-max-len 25]
 ```
 
 **Generates**:
-- Demo FASTQ files with controlled read counts
-- Simulates differential expression between conditions
-- Good for demonstration purposes
+- Demo FASTQ files with controlled read counts (paired-end)
+- Simulates differential expression between conditions (10 up, 10 down by default)
+- Outputs to `../test_data/demo_data/` and reference to `../test_data/demo_reference/`
+- Also writes a simple `metadata.csv` with sample, condition, replicate
+- Good for demonstration purposes; parameters are configurable via CLI
+
+Adapter contamination:
+- Use `--adapter-rate` to control the fraction of read pairs contaminated with Illumina TruSeq3-PE-2 sequences (default 0.1 = 10%).
+- Use `--adapter-max-len` to set the maximum 3' adapter length appended (default 25 nt).
+- These adapters are detectable/removable by standard trimmers (e.g., Trimmomatic with TruSeq3-PE-2).
 
 ---
 
