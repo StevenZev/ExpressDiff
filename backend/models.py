@@ -1,8 +1,8 @@
 """
 Pydantic models for ExpressDiff API request/response validation.
-Python 3.6 compatible version.
+Python 3.11.4 compatible version.
 """
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, List, Any
 from datetime import datetime
 from enum import Enum
@@ -125,7 +125,8 @@ class DESeqParams(BaseModel):
     alpha: float = Field(0.05, ge=0.01, le=0.1, description="Significance threshold")
     lfc_threshold: float = Field(1.0, ge=0.0, description="Log2 fold change threshold")
 
-    @validator('design')
+    @field_validator('design')
+    @classmethod
     def validate_design(cls, v):
         if not v.startswith('~'):
             raise ValueError("Design formula must start with '~'")

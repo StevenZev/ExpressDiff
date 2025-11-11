@@ -147,7 +147,7 @@ async def create_run(run_request: RunCreate):
     )
     
     # Save initial state
-    state = run_info.dict()
+    state = run_info.model_dump()
     save_run_state(run_id, state, Config.RUNS_DIR)
     
     return run_info

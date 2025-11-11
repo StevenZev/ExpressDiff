@@ -3,14 +3,15 @@
 ## 🏗️ Architecture Overview
 
 ### Backend (FastAPI)
-- **Framework**: FastAPI 0.68.2 + Uvicorn
+- **Framework**: FastAPI 0.109.0 + Uvicorn 0.27.0
+- **Python Version**: 3.11.4
 - **Location**: `backend/`
 - **Key Components**:
   - `api/main.py` - REST endpoints
   - `core/slurm.py` - Job management
   - `core/script_generator.py` - SLURM script generation
   - `core/config.py` - Configuration constants
-  - `models.py` - Pydantic schemas
+  - `models.py` - Pydantic v2 schemas
 
 ### Frontend (React)
 - **Framework**: React 19 + TypeScript + Material-UI
@@ -32,6 +33,9 @@
 
 ### Setting Up Development Environment
 ```bash
+# Load Python 3.11.4 module
+module load gcc/11.4.0 openmpi/4.1.4 python/3.11.4
+
 # Backend setup
 python -m venv venv
 source venv/bin/activate

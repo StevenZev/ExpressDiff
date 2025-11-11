@@ -79,6 +79,15 @@ TEST_*.md
 TRIMMING_ARCHITECTURE.md
 VALIDATION_SYSTEM.md
 
+# Planning and reference documentation
+CLEANUP_SUMMARY.md
+DEPLOYMENT_CLEANUP.md
+REPOSITORY_ORGANIZATION.md
+DEVELOPMENT_SETUP.md
+DEVELOPMENT.md
+PYTHON_311_UPDATE.md
+TESTING_LAUNCHER.md
+
 # Node modules and build artifacts
 frontend/node_modules/
 frontend/build/

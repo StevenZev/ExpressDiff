@@ -1,6 +1,6 @@
 """
 Configuration settings for ExpressDiff backend.
-Python 3.6 compatible version.
+Python 3.11.4 compatible version.
 """
 import os
 from pathlib import Path
