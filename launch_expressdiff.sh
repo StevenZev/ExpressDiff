@@ -15,6 +15,22 @@ echo "========================================"
 # Determine install directory (prefer EasyBuild root)
 INSTALL_DIR="${EBROOTEXPRESSDIFF:-$SCRIPT_DIR}"
 
+# Determine work directory for user data (matching backend config logic)
+if [[ -n "${EXPRESSDIFF_WORKDIR:-}" ]]; then
+    WORK_DIR="$EXPRESSDIFF_WORKDIR"
+elif [[ -n "${SCRATCH:-}" ]]; then
+    WORK_DIR="$SCRATCH/ExpressDiff"
+else
+    WORK_DIR="$HOME/ExpressDiff"
+fi
+mkdir -p "$WORK_DIR"
+
+# Configure Node.js/npm to use cache in user's work directory (not system/software dirs)
+export npm_config_cache="$WORK_DIR/.npm"
+export npm_config_userconfig="$WORK_DIR/.npmrc"
+export NPM_CONFIG_CACHE="$WORK_DIR/.npm"
+export NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=4096"
+
 # Host info for user-facing URLs
 HOSTNAME=$(hostname -f 2>/dev/null || hostname)
 
@@ -23,10 +39,11 @@ echo "Backend will listen on: http://$HOSTNAME:8000"
 echo "Frontend will listen on: http://$HOSTNAME:3000"
 echo
 
-# Logs
-mkdir -p "$INSTALL_DIR/logs"
-BACKEND_LOG="$INSTALL_DIR/logs/backend.log"
-FRONTEND_LOG="$INSTALL_DIR/logs/frontend.log"
+# Logs directory in user's work directory (not install dir, which is read-only)
+LOG_DIR="$WORK_DIR/logs"
+mkdir -p "$LOG_DIR"
+BACKEND_LOG="$LOG_DIR/backend.log"
+FRONTEND_LOG="$LOG_DIR/frontend.log"
 
 # Helper to start backend in background
 start_backend_bg() {
@@ -40,8 +57,8 @@ start_backend_bg() {
     fi
 
     nohup "${BACKEND_CMD[@]}" > "$BACKEND_LOG" 2>&1 &
-    echo $! > "$INSTALL_DIR/logs/backend.pid"
-    echo "Backend started (PID=$(cat $INSTALL_DIR/logs/backend.pid)), logs: $BACKEND_LOG"
+    echo $! > "$LOG_DIR/backend.pid"
+    echo "Backend started (PID=$(cat $LOG_DIR/backend.pid)), logs: $BACKEND_LOG"
 }
 
 # Helper to start frontend in background
@@ -60,7 +77,7 @@ start_frontend_bg() {
     else
         # No build found — fall back to dev server (npm start)
         if [[ -d "$INSTALL_DIR/frontend" && -f "$INSTALL_DIR/frontend/package.json" ]]; then
-            FRONTEND_CMD=(bash -lc "cd '$INSTALL_DIR/frontend' && export REACT_APP_API_URL='http://localhost:8000' && export BROWSER=none && npm start")
+            FRONTEND_CMD=(bash -lc "cd '$INSTALL_DIR/frontend' && export npm_config_cache='$WORK_DIR/.npm' && export npm_config_userconfig='$WORK_DIR/.npmrc' && export NPM_CONFIG_CACHE='$WORK_DIR/.npm' && export REACT_APP_API_URL='http://localhost:8000' && export BROWSER=none && npm start")
         else
             echo "No frontend available to start (no build or package.json)." >&2
             return 0
@@ -68,8 +85,8 @@ start_frontend_bg() {
     fi
 
     nohup "${FRONTEND_CMD[@]}" > "$FRONTEND_LOG" 2>&1 &
-    echo $! > "$INSTALL_DIR/logs/frontend.pid"
-    echo "Frontend started (PID=$(cat $INSTALL_DIR/logs/frontend.pid)), logs: $FRONTEND_LOG"
+    echo $! > "$LOG_DIR/frontend.pid"
+    echo "Frontend started (PID=$(cat $LOG_DIR/frontend.pid)), logs: $FRONTEND_LOG"
 }
 
 # Start services (non-interactive)
@@ -77,6 +94,6 @@ start_backend_bg
 start_frontend_bg
 
 echo
-echo "Launch complete. To stop services, kill the PIDs in $INSTALL_DIR/logs/*.pid"
+echo "Launch complete. To stop services, kill the PIDs in $LOG_DIR/*.pid"
 echo "Backend log: $BACKEND_LOG"
 echo "Frontend log: $FRONTEND_LOG"
