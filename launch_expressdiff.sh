@@ -13,6 +13,19 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
     source "$SCRIPT_DIR/.env"
 fi
 
+# Set working directory if not already set
+if [[ -z "$EXPRESSDIFF_WORKDIR" ]]; then
+    if [[ -n "$SCRATCH" ]]; then
+        export EXPRESSDIFF_WORKDIR="$SCRATCH/expressdiff"
+        echo "Setting work directory to: $EXPRESSDIFF_WORKDIR"
+    else
+        # Fallback to a sensible default in the project directory
+        export EXPRESSDIFF_WORKDIR="$SCRIPT_DIR/ExpressDiff"
+        echo "WARNING: SCRATCH not set. Using project directory: $EXPRESSDIFF_WORKDIR"
+    fi
+    mkdir -p "$EXPRESSDIFF_WORKDIR"
+fi
+
 echo "ExpressDiff RNA-seq Pipeline Launcher"
 echo "========================================"
 echo
@@ -83,6 +96,13 @@ start_backend() {
     else
         echo "   No venv found at ./venv — running with system Python"
     fi
+
+    # Ensure EXPRESSDIFF_WORKDIR is exported
+    if [[ -z "$EXPRESSDIFF_WORKDIR" ]]; then
+        echo "ERROR: EXPRESSDIFF_WORKDIR not set"
+        exit 1
+    fi
+    echo "   Work directory: $EXPRESSDIFF_WORKDIR"
 
     # Use the current Python interpreter to run uvicorn so the venv's python is used when active
     python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
