@@ -43,6 +43,30 @@ const FileUpload: React.FC<FileUploadProps> = ({ runId, onUploadComplete }) => {
   const [uploading, setUploading] = useState(false);
 
   const allowedExtensions = ['.fq.gz', '.fastq.gz', '.fa', '.fasta', '.gtf', '.csv', '.tsv'];
+  
+  // File type descriptions for user guidance
+  const fileTypeGuide = {
+    fastq: {
+      label: 'FASTQ Files',
+      description: 'Raw sequencing reads (.fq.gz or .fastq.gz). Upload both R1 and R2 for paired-end data.',
+      extensions: ['.fq.gz', '.fastq.gz']
+    },
+    genome: {
+      label: 'Reference Genome',
+      description: 'FASTA file (.fa or .fasta) with genome sequence. Use same version as GTF file.',
+      extensions: ['.fa', '.fasta']
+    },
+    annotation: {
+      label: 'Gene Annotation',
+      description: 'GTF file with gene coordinates. Must match genome version (hg38, mm10, etc).',
+      extensions: ['.gtf']
+    },
+    metadata: {
+      label: 'Sample Metadata',
+      description: 'CSV file with sample information (required for DESeq2). Must have columns for sample name and condition.',
+      extensions: ['.csv', '.tsv']
+    }
+  };
 
   const isValidFile = (file: File): boolean => {
     const filename = file.name.toLowerCase();
@@ -179,6 +203,29 @@ const FileUpload: React.FC<FileUploadProps> = ({ runId, onUploadComplete }) => {
 
   return (
     <Box>
+      {/* File Upload Guide */}
+      <Alert severity="info" sx={{ mb: 3 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+          📚 What to Upload
+        </Typography>
+        <Box sx={{ ml: 2 }}>
+          <Typography variant="body2" paragraph>
+            <strong>Required for all runs:</strong>
+            <ul style={{ margin: '8px 0', paddingLeft: 20 }}>
+              <li>FASTQ files (.fq.gz or .fastq.gz) - Your raw sequencing data. Upload both R1 and R2 for paired-end.</li>
+              <li>Reference genome (.fa or .fasta) - DNA sequence for alignment</li>
+              <li>Gene annotation (.gtf) - Gene coordinates and features</li>
+            </ul>
+          </Typography>
+          <Typography variant="body2">
+            <strong>Required for DESeq2 analysis:</strong>
+            <ul style={{ margin: '8px 0', paddingLeft: 20 }}>
+              <li>Metadata (.csv or .tsv) - Sample information with condition/group assignments</li>
+            </ul>
+          </Typography>
+        </Box>
+      </Alert>
+
       {/* Drop Zone */}
       <Card 
         sx={{ 

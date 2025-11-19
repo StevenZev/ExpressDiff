@@ -262,16 +262,24 @@ const RunCard: React.FC<RunCardProps> = ({ run, onUpdate }) => {
             onChange={handleTabChange}
             sx={{ borderBottom: 1, borderColor: 'divider' }}
           >
-            <Tab icon={<CloudUpload />} label="Files" />
-            <Tab icon={<PlayArrow />} label="Pipeline" />
-            <Tab icon={<Assessment />} label="Results" />
+            <Tooltip title="Upload FASTQ, genome reference, annotation, and metadata files">
+              <Tab icon={<CloudUpload />} label="Files" />
+            </Tooltip>
+            <Tooltip title="Execute pipeline stages in order: QC → Trim → QC → Align → Count → Analyze">
+              <Tab icon={<PlayArrow />} label="Pipeline" />
+            </Tooltip>
+            <Tooltip title="View quality reports, read counts, and differential expression results">
+              <Tab icon={<Assessment />} label="Results" />
+            </Tooltip>
           </Tabs>
 
           <Box sx={{ p: 3 }}>
             {selectedTab === 0 && (
               <Box>
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  Upload your paired-end FASTQ files (ending with _1.fq.gz and _2.fq.gz). Files will be stored in the run directory.
+                  📂 <strong>Upload Your Data</strong><br/>
+                  Upload paired-end FASTQ files (*.fq.gz), reference genome (*.fa), gene annotation (*.gtf), 
+                  and sample metadata (*.csv) for DESeq2 analysis. Files are organized by run and persist after logout.
                 </Alert>
                 <FileUpload
                   runId={run.run_id}
@@ -282,6 +290,11 @@ const RunCard: React.FC<RunCardProps> = ({ run, onUpdate }) => {
 
             {selectedTab === 1 && (
               <Box>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  ▶️ <strong>Execute Pipeline Stages</strong><br/>
+                  Run each stage in order. Each stage depends on the previous stage's completion. 
+                  Click "Run" to submit a job to the HPC cluster and "View Logs" to monitor progress.
+                </Alert>
                 <StageControls
                   run={run}
                   onUpdate={onUpdate}
@@ -292,7 +305,9 @@ const RunCard: React.FC<RunCardProps> = ({ run, onUpdate }) => {
             {selectedTab === 2 && (
               <Box>
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  View quality control reports, read counts, and differential expression analysis results. Download data files as needed.
+                  📊 <strong>View Results</strong><br/>
+                  Quality control reports (FastQC, MultiQC), gene expression counts, and differential expression analysis 
+                  results from DESeq2. Download data files for further analysis.
                 </Alert>
                 <QCResults run={run} onUpdate={onUpdate} />
                 <Box sx={{ mt: 3 }}>
