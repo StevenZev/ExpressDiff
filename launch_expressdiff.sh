@@ -35,7 +35,7 @@ export NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=4096"
 HOSTNAME=$(hostname -f 2>/dev/null || hostname)
 
 #echo "Using install dir: $INSTALL_DIR"
-echo "Backend will listen on: http://$HOSTNAME:8000"
+echo "Backend will listen on: http://$HOSTNAME:81234"
 echo "Frontend will listen on: http://$HOSTNAME:3000"
 echo
 
@@ -83,9 +83,9 @@ check_and_free_port() {
 start_backend_bg() {
     echo "Starting backend (uvicorn)..."
     
-    # Check and free port 8000 if needed
-    if ! check_and_free_port 8000; then
-        echo "Failed to start backend: port 8000 unavailable" >&2
+    # Check and free port 81234 if needed
+    if ! check_and_free_port 81234; then
+        echo "Failed to start backend: port 81234 unavailable" >&2
         return 1
     fi
     
@@ -96,9 +96,9 @@ start_backend_bg() {
     export PYTHONPATH="$INSTALL_DIR:${PYTHONPATH:-}"
 
     if command -v uvicorn >/dev/null 2>&1; then
-        BACKEND_CMD=(uvicorn backend.api.main:app --host 0.0.0.0 --port 8000)
+        BACKEND_CMD=(uvicorn backend.api.main:app --host 0.0.0.0 --port 81234)
     else
-        BACKEND_CMD=(python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000)
+        BACKEND_CMD=(python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 81234)
     fi
 
     nohup "${BACKEND_CMD[@]}" > "$BACKEND_LOG" 2>&1 &
@@ -140,7 +140,7 @@ start_frontend_bg() {
             # Run npm from work directory to avoid writing to install directory
             cd "$WORK_DIR"
             # Create a temporary script to run npm start from the correct location
-            FRONTEND_CMD=(bash -c "export npm_config_cache='$WORK_DIR/.npm' && export npm_config_userconfig='$WORK_DIR/.npmrc' && export NPM_CONFIG_CACHE='$WORK_DIR/.npm' && export REACT_APP_API_URL='http://localhost:8000' && export BROWSER=none && cd '$INSTALL_DIR/frontend' && npm start --prefix '$INSTALL_DIR/frontend'")
+            FRONTEND_CMD=(bash -c "export npm_config_cache='$WORK_DIR/.npm' && export npm_config_userconfig='$WORK_DIR/.npmrc' && export NPM_CONFIG_CACHE='$WORK_DIR/.npm' && export REACT_APP_API_URL='http://localhost:81234' && export BROWSER=none && cd '$INSTALL_DIR/frontend' && npm start --prefix '$INSTALL_DIR/frontend'")
         else
             echo "No frontend available to start (no build or package.json)." >&2
             return 0

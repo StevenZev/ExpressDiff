@@ -3,7 +3,7 @@
 # Usage: expressdiff_api.sh [PORT]
 set -euo pipefail
 
-PORT="${1:-8000}"
+PORT="${1:-81234}"
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$BASE_DIR"
 

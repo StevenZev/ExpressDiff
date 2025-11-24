@@ -38,8 +38,8 @@ case "${subcmd}" in
     exec "${INSTALL_DIR}/launch_expressdiff.sh" "$@"
     ;;
   api)
-    # Start API-only launcher (port optional, default 8000)
-    exec "${INSTALL_DIR}/bin/expressdiff_api.sh" "${1:-8000}"
+    # Start API-only launcher (port optional, default 81234)
+      exec "${INSTALL_DIR}/bin/expressdiff_api.sh" "${1:-81234}"
     ;;
   help|-h|--help)
     cat <<EOF
@@ -65,7 +65,7 @@ Usage: ExpressDiff [command]
 Commands:
   run            Start the ExpressDiff pipeline (backend + frontend)
   launch         Start backend (and frontend if available) [alias for 'run']
-  api [PORT]     Start only the FastAPI backend on PORT (default: 8000)
+  api [PORT]     Start only the FastAPI backend on PORT (default: 81234)
   help           Show this help message
 
 Environment:
