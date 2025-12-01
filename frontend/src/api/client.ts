@@ -1,7 +1,9 @@
 import axios from 'axios';
 
-// API Base URL - will be the tunneled backend
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// API Base URL - prefer runtime window.REACT_APP_API_URL (from public/config.js),
+// then env var, then default localhost.
+// Hardcoded backend URL (no runtime config.js)
+const API_BASE_URL = 'http://localhost:51234';
 
 // Create axios instance
 const apiClient = axios.create({

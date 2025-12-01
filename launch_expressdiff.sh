@@ -109,7 +109,7 @@ start_backend_bg() {
 # Helper to start frontend in background
 start_frontend_bg() {
     echo "Starting frontend..."
-    
+
     # Kill old frontend process if it exists
     local pid_file="$LOG_DIR/frontend.pid"
     if [[ -f "$pid_file" ]]; then
@@ -120,36 +120,19 @@ start_frontend_bg() {
             sleep 2
         fi
     fi
-    
-    # Prefer serving a built static site if present
-    if [[ -f "$INSTALL_DIR/frontend/build/index.html" ]]; then
-        # Prefer npx serve if available, fall back to python http.server
-        if command -v npx >/dev/null 2>&1; then
-            # Use work directory for npm cache
-            cd "$WORK_DIR"
-            FRONTEND_CMD=(npx serve -s "$INSTALL_DIR/frontend/build" -l 3000)
-        elif command -v serve >/dev/null 2>&1; then
-            cd "$WORK_DIR"
-            FRONTEND_CMD=(serve -s "$INSTALL_DIR/frontend/build" -l 3000)
-        else
-            FRONTEND_CMD=(python3 -m http.server 3000 --directory "$INSTALL_DIR/frontend/build")
-        fi
-    else
-        # No build found — fall back to dev server (npm start)
-        if [[ -d "$INSTALL_DIR/frontend" && -f "$INSTALL_DIR/frontend/package.json" ]]; then
-            # Run npm from work directory to avoid writing to install directory
-            cd "$WORK_DIR"
-            # Create a temporary script to run npm start from the correct location
-            FRONTEND_CMD=(bash -c "export npm_config_cache='$WORK_DIR/.npm' && export npm_config_userconfig='$WORK_DIR/.npmrc' && export NPM_CONFIG_CACHE='$WORK_DIR/.npm' && export REACT_APP_API_URL='http://localhost:81234' && export BROWSER=none && cd '$INSTALL_DIR/frontend' && npm start --prefix '$INSTALL_DIR/frontend'")
-        else
-            echo "No frontend available to start (no build or package.json)." >&2
-            return 0
-        fi
-    fi
 
-    nohup "${FRONTEND_CMD[@]}" > "$FRONTEND_LOG" 2>&1 &
-    echo $! > "$LOG_DIR/frontend.pid"
-    echo "Frontend started (PID=$(cat $LOG_DIR/frontend.pid)), logs: $FRONTEND_LOG"
+    # Always serve the build from the install directory using python http.server on port 51235
+    BUILD_DIR="$INSTALL_DIR/frontend/build"
+    if [[ -f "$BUILD_DIR/index.html" ]]; then
+        FRONTEND_CMD=(python3 -m http.server 51235 --directory "$BUILD_DIR")
+        nohup "${FRONTEND_CMD[@]}" > "$FRONTEND_LOG" 2>&1 &
+        echo $! > "$LOG_DIR/frontend.pid"
+        echo "Frontend started (PID=$(cat $LOG_DIR/frontend.pid)), logs: $FRONTEND_LOG"
+        echo "Frontend is being served at: http://$HOSTNAME:51235"
+    else
+        echo "No frontend build found at $BUILD_DIR. Please build the frontend and try again." >&2
+        return 1
+    fi
 }
 
 # Start services (non-interactive)
