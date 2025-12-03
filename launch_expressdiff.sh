@@ -18,10 +18,9 @@ INSTALL_DIR="${EBROOTEXPRESSDIFF:-$SCRIPT_DIR}"
 # Determine work directory for user data (matching backend config logic)
 if [[ -n "${EXPRESSDIFF_WORKDIR:-}" ]]; then
     WORK_DIR="$EXPRESSDIFF_WORKDIR"
-elif [[ -n "${SCRATCH:-}" ]]; then
-    WORK_DIR="$SCRATCH/ExpressDiff"
 else
-    WORK_DIR="$HOME/ExpressDiff"
+    # Default to /scratch/<username>/ExpressDiff
+    WORK_DIR="/scratch/$(whoami)/ExpressDiff"
 fi
 mkdir -p "$WORK_DIR"
 
@@ -35,8 +34,8 @@ export NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=4096"
 HOSTNAME=$(hostname -f 2>/dev/null || hostname)
 
 #echo "Using install dir: $INSTALL_DIR"
-echo "Backend will listen on: http://$HOSTNAME:81234"
-echo "Frontend will listen on: http://$HOSTNAME:3000"
+echo "Backend will listen on: http://$HOSTNAME:51234"
+echo "Frontend will listen on: http://$HOSTNAME:51235"
 echo
 
 # Logs directory in user's work directory (not install dir, which is read-only)
@@ -44,6 +43,61 @@ LOG_DIR="$WORK_DIR/logs"
 mkdir -p "$LOG_DIR"
 BACKEND_LOG="$LOG_DIR/backend.log"
 FRONTEND_LOG="$LOG_DIR/frontend.log"
+
+# Helper to stop all running services
+stop_services() {
+    echo "Stopping ExpressDiff services..."
+    
+    # Stop backend
+    local backend_pid_file="$LOG_DIR/backend.pid"
+    if [[ -f "$backend_pid_file" ]]; then
+        local backend_pid=$(cat "$backend_pid_file")
+        if ps -p "$backend_pid" > /dev/null 2>&1; then
+            echo "Stopping backend (PID: $backend_pid)..."
+            kill "$backend_pid" 2>/dev/null || true
+            sleep 2
+            # Force kill if still running
+            if ps -p "$backend_pid" > /dev/null 2>&1; then
+                kill -9 "$backend_pid" 2>/dev/null || true
+            fi
+            echo "Backend stopped."
+        else
+            echo "Backend process (PID: $backend_pid) not running."
+        fi
+        rm -f "$backend_pid_file"
+    else
+        echo "No backend PID file found."
+    fi
+    
+    # Stop frontend
+    local frontend_pid_file="$LOG_DIR/frontend.pid"
+    if [[ -f "$frontend_pid_file" ]]; then
+        local frontend_pid=$(cat "$frontend_pid_file")
+        if ps -p "$frontend_pid" > /dev/null 2>&1; then
+            echo "Stopping frontend (PID: $frontend_pid)..."
+            kill "$frontend_pid" 2>/dev/null || true
+            sleep 2
+            # Force kill if still running
+            if ps -p "$frontend_pid" > /dev/null 2>&1; then
+                kill -9 "$frontend_pid" 2>/dev/null || true
+            fi
+            echo "Frontend stopped."
+        else
+            echo "Frontend process (PID: $frontend_pid) not running."
+        fi
+        rm -f "$frontend_pid_file"
+    else
+        echo "No frontend PID file found."
+    fi
+    
+    echo "All services stopped."
+}
+
+# Check if stop command is requested
+if [[ "${1:-}" == "stop" ]]; then
+    stop_services
+    exit 0
+fi
 
 # Helper to check if port is available and kill old process if needed
 check_and_free_port() {
@@ -83,10 +137,20 @@ check_and_free_port() {
 start_backend_bg() {
     echo "Starting backend (uvicorn)..."
     
-    # Check and free port 81234 if needed
-    if ! check_and_free_port 81234; then
-        echo "Failed to start backend: port 81234 unavailable" >&2
-        return 1
+    # Kill old backend process if it exists
+    local pid_file="$LOG_DIR/backend.pid"
+    if [[ -f "$pid_file" ]]; then
+        local old_pid=$(cat "$pid_file")
+        if ps -p "$old_pid" > /dev/null 2>&1; then
+            echo "Killing previous backend process (PID: $old_pid)..."
+            kill "$old_pid" 2>/dev/null || true
+            sleep 2
+            # Force kill if still running
+            if ps -p "$old_pid" > /dev/null 2>&1; then
+                kill -9 "$old_pid" 2>/dev/null || true
+                sleep 1
+            fi
+        fi
     fi
     
     # Change to install directory so backend module can be imported
@@ -96,9 +160,9 @@ start_backend_bg() {
     export PYTHONPATH="$INSTALL_DIR:${PYTHONPATH:-}"
 
     if command -v uvicorn >/dev/null 2>&1; then
-        BACKEND_CMD=(uvicorn backend.api.main:app --host 0.0.0.0 --port 81234)
+        BACKEND_CMD=(uvicorn backend.api.main:app --host 0.0.0.0 --port 51234)
     else
-        BACKEND_CMD=(python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 81234)
+        BACKEND_CMD=(python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 51234)
     fi
 
     nohup "${BACKEND_CMD[@]}" > "$BACKEND_LOG" 2>&1 &
