@@ -37,9 +37,34 @@ case "${subcmd}" in
     # 'run' is an alias for 'launch' for convenience
     exec "${INSTALL_DIR}/launch_expressdiff.sh" "$@"
     ;;
-  api)
-    # Start API-only launcher (port optional, default 81234)
-      exec "${INSTALL_DIR}/bin/expressdiff_api.sh" "${1:-81234}"
+  stop)
+    # Stop running ExpressDiff services
+    LOGS_DIR="${WORKDIR}/logs"
+    stopped=false
+    
+    if [[ -f "${LOGS_DIR}/backend.pid" ]]; then
+      backend_pid=$(cat "${LOGS_DIR}/backend.pid")
+      if kill -0 "$backend_pid" 2>/dev/null; then
+        echo "Stopping backend (PID: $backend_pid)..."
+        kill "$backend_pid" && echo "Backend stopped."
+        stopped=true
+      fi
+      rm -f "${LOGS_DIR}/backend.pid"
+    fi
+    
+    if [[ -f "${LOGS_DIR}/frontend.pid" ]]; then
+      frontend_pid=$(cat "${LOGS_DIR}/frontend.pid")
+      if kill -0 "$frontend_pid" 2>/dev/null; then
+        echo "Stopping frontend (PID: $frontend_pid)..."
+        kill "$frontend_pid" && echo "Frontend stopped."
+        stopped=true
+      fi
+      rm -f "${LOGS_DIR}/frontend.pid"
+    fi
+    
+    if [[ "$stopped" == false ]]; then
+      echo "No running ExpressDiff services found."
+    fi
     ;;
   help|-h|--help)
     cat <<EOF
@@ -65,7 +90,7 @@ Usage: ExpressDiff [command]
 Commands:
   run            Start the ExpressDiff pipeline (backend + frontend)
   launch         Start backend (and frontend if available) [alias for 'run']
-  api [PORT]     Start only the FastAPI backend on PORT (default: 81234)
+  stop           Stop running ExpressDiff services
   help           Show this help message
 
 Environment:
