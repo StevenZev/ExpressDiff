@@ -22,6 +22,7 @@ const Dashboard: React.FC = () => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [healthStatus, setHealthStatus] = useState<string>('unknown');
   const [userInfo, setUserInfo] = useState<{ computing_id: string } | null>(null);
+  const [storageInfo, setStorageInfo] = useState<{ data_directory: string } | null>(null);
 
   const loadRuns = async () => {
     try {
@@ -46,6 +47,15 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const loadStorageInfo = async () => {
+    try {
+      const info = await api.getStorageInfo();
+      setStorageInfo(info);
+    } catch (err) {
+      console.error('Failed to load storage info:', err);
+    }
+  };
+
   const checkHealth = async () => {
     try {
       const health = await api.health();
@@ -59,6 +69,7 @@ const Dashboard: React.FC = () => {
     loadRuns();
     checkHealth();
     loadUserInfo();
+    loadStorageInfo();
   }, []);
 
   const handleCreateRun = () => {
@@ -81,7 +92,6 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
@@ -93,6 +103,12 @@ const Dashboard: React.FC = () => {
               Computing ID: <strong>{userInfo.computing_id}</strong>
             </Typography>
           )}
+          {storageInfo && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Working Directory: <strong>{storageInfo.data_directory}</strong>
+            </Typography>
+          )}
+        </Box>
         </Box>
         <Box display="flex" alignItems="center" gap={2}>
           <Chip

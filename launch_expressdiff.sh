@@ -207,3 +207,16 @@ echo
 echo "Launch complete. To stop services, kill the PIDs in $LOG_DIR/*.pid"
 echo "Backend log: $BACKEND_LOG"
 echo "Frontend log: $FRONTEND_LOG"
+
+# Open frontend in Firefox automatically
+FRONTEND_URL="http://$HOSTNAME:51235"
+echo
+echo "Opening ExpressDiff in Firefox: $FRONTEND_URL"
+echo
+
+if command -v firefox > /dev/null 2>&1 && [ -n "${DISPLAY:-}" ]; then
+    firefox "$FRONTEND_URL" 2>/dev/null &
+else
+    echo "Firefox not available or no GUI detected."
+    echo "Please manually open: $FRONTEND_URL"
+fi
