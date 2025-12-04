@@ -339,21 +339,13 @@ const StageControls: React.FC<StageControlsProps> = ({ run, onUpdate }) => {
                   {getStatusIcon(status)}
                 </ListItemIcon>
                 <Box flex={1}>
-                  <Tooltip title={stage.description}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600, cursor: 'help', textDecoration: 'underline dotted' }}>
-                      {stage.displayName}
-                    </Typography>
-                  </Tooltip>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    {stage.displayName}
+                  </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     {stage.description}
                   </Typography>
                 </Box>
-                
-                <ListItemText
-                  primary={stage.displayName}
-                  secondary={stage.description}
-                  sx={{ flex: 1 }}
-                />
                 
                 <Box display="flex" alignItems="center" gap={1}>
                   <Chip
