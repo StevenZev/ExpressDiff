@@ -35,6 +35,11 @@ mkdir -p "$STAR_DIR"
 mkdir -p "$STAR_DIR/genome_index"
 mkdir -p "$LOGS_DIR"
 
+# Work inside the run's STAR directory so STAR writes logs/index locally
+cd "$STAR_DIR"
+echo "Working directory: $(pwd)"
+echo ""
+
 # Clean up any previous output (keeping logs directory)
 echo "Cleaning previous STAR output files..."
 rm -f "$STAR_DIR"/*.bam "$STAR_DIR"/*.tab "$STAR_DIR"/*_STARtmp 2>/dev/null || true
@@ -148,6 +153,7 @@ if [ ! -f "$STAR_INDEX/SA" ]; then
          --genomeFastaFiles "$FASTA" \
          --sjdbGTFfile "$GTF" \
          --sjdbOverhang 99 \
+         --outFileNamePrefix "$STAR_DIR/" \
          2>&1 | tee "$LOGS_DIR/genome_index_build.log"
     
     echo ""
