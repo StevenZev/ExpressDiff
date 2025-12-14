@@ -7,14 +7,14 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
-#SBATCH --output=./runs/{RUN_ID}/qc_raw/fastqc_multiqc_%j.out
-#SBATCH --error=./runs/{RUN_ID}/qc_raw/fastqc_multiqc_%j.err
+#SBATCH --output={RUN_DIR}/qc_raw/fastqc_multiqc_%j.out
+#SBATCH --error={RUN_DIR}/qc_raw/fastqc_multiqc_%j.err
 
 set -euo pipefail
 
 # Run-specific variables
 RUN_ID="{RUN_ID}"
-RUN_DIR="./runs/$RUN_ID"
+RUN_DIR="{RUN_DIR}"
 RAW_DIR="$RUN_DIR/raw"
 QC_OUT_DIR="$RUN_DIR/qc_raw"
 
