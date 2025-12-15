@@ -92,6 +92,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
+    <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
@@ -108,7 +109,6 @@ const Dashboard: React.FC = () => {
               Working Directory: <strong>{storageInfo.data_directory}</strong>
             </Typography>
           )}
-        </Box>
         </Box>
         <Box display="flex" alignItems="center" gap={2}>
           <Chip
