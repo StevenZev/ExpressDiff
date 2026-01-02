@@ -6,6 +6,8 @@ This document describes the updated and organized structure of the ExpressDiff r
 
 ```
 ExpressDiff/
+├── docs/                      # Consolidated documentation (start here)
+│   └── INDEX.md               # Documentation entry point
 ├── backend/                    # FastAPI backend application
 │   ├── api/                    # REST API endpoints
 │   ├── core/                   # Core functionality (SLURM, config)
@@ -33,6 +35,11 @@ ExpressDiff/
 │   ├── featurecounts.slurm.template
 │   └── deseq2.slurm.template
 │
+├── demo_dataset/               # Bundled demo reads/reference/metadata
+│   ├── Demo Reads/             # Paired-end FASTQ (control/treatment replicates)
+│   ├── Demo Reference/         # Minimal FASTA + GTF
+│   └── Demo Metadata/          # metadata.csv for DE stage
+│
 ├── test_data/                  # Generated test files (small)
 │   ├── sample_A_1.fq.gz
 │   ├── sample_A_2.fq.gz
@@ -50,8 +57,6 @@ ExpressDiff/
 ├── venv/                       # Python virtual environment (gitignored)
 │
 ├── README.md                   # Main documentation
-├── DEVELOPMENT.md              # Development guide
-├── DEVELOPMENT_SETUP.md        # Setup instructions
 ├── LICENSE                     # MIT License
 │
 ├── modulefile                  # HPC module definition
@@ -103,6 +108,11 @@ ExpressDiff/
 - Used for quick testing and validation
 - **NOT for production use**
 
+**`demo_dataset/`**
+- Bundled end-to-end demo dataset (reads + reference + metadata)
+- Intended for validation and training/demonstration
+- Usage guide: `ExpressDiff/docs/DEMO_DATASET.md:1`
+
 **`test_data_generators/`** ⭐ NEW
 - Scripts to generate test data
 - Self-contained, no external dependencies
@@ -145,18 +155,15 @@ The following are **not** stored in the repository (configured in `.gitignore`):
 
 **Main Documentation:**
 - `README.md` - User-facing documentation and quick start
-- `DEVELOPMENT.md` - Developer guide
-- `DEVELOPMENT_SETUP.md` - Detailed setup instructions
+- `docs/INDEX.md` - Canonical documentation index (roles + technical references)
 - `LICENSE` - MIT License
 
 **Deployment Documentation:**
-- `DEPLOYMENT_CLEANUP.md` - Cleanup guide and rationale
-- `CLEANUP_SUMMARY.md` - Results of cleanup operation
 - `REPOSITORY_ORGANIZATION.md` - This file
 
 **Component Documentation:**
 - `test_data_generators/README.md` - Test data generator documentation
-- `frontend/README.md` - Frontend-specific documentation
+- `frontend/DOCUMENTATION_INDEX.md` - Frontend docs entry point
 
 ## 🔧 Setup and Launch Scripts
 
