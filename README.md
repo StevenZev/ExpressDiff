@@ -1,53 +1,76 @@
 # ExpressDiff
-Differential Analysis Pipeline for RNA-Seq Data
 
-# Setup
-## Go to ood.hpc.virginia.edu to start a Desktop interactive job and a JupyterLab job
-if prompted, sign in with UVA account
-### Find the button to start interactive jobs in the taskbar on top
-![image_info](pictures/ood_dashboard.png)
-### Choose Desktop or JupyterLab from the dropdown
-![image_info](pictures/dropdown.png)
-For the JupyterLab job, we recommend allocating around 64GB of memory (but if your files are larger, you may need to add more!)
-![image_info](pictures/jupyter.png)
-You can also create a new job by selecting from the menu on the left
-After creating a job, you should be brought to a page that shows your interactive jobs (this is what it looks like after creating both jobs):
-![image_info](pictures/interactive_jobs.png)
-if they say Queued or Starting, you may need to wait for a moment.
-### Click the "Connect to Jupyter" and "Launch Desktop" buttons to open the interactive jobs
-the JupyterLab tab will open a terminal for you, but it may not be in the right directory. Use this command to see the directory you are in.
-```shell
-pwd
+ExpressDiff is an HPC-oriented RNA-seq pipeline with a web UI. It provides a FastAPI backend that orchestrates SLURM stages and a React/TypeScript frontend for run creation, file upload, pipeline execution, and results viewing.
+
+## Start Here
+- Documentation index: `ExpressDiff/docs/INDEX.md:1`
+- End-user guide (UI): `ExpressDiff/frontend/USER_GUIDE.md:1`
+- Quick reference: `ExpressDiff/frontend/QUICK_REFERENCE.md:1`
+- Bundled demo dataset: `ExpressDiff/docs/DEMO_DATASET.md:1`
+
+## Quick Start (Users)
+
+### HPC module deployment (recommended)
+```bash
+salloc -A <your_account> -p standard -c 4 --mem=16G -t 02:00:00
+module load expressdiff
+ExpressDiff run
 ```
-For example, I have an empty directory called Example (can see on sidebar on the left), but the initial terminal is not in that same directory:
-![image_info](pictures/wrong_directory.png)
-if it's in the wrong directory, can click the + icon to open the launcher, then scroll down and open a new terminal to quickly go to the directory you have open in the sidebar
-![image_info](pictures/launcher.png)
-## Clone Git Repository
-run this command in the terminal after checking that you are in the right directory
-```shell
-git clone https://github.com/StevenZev/ExpressDiff.git
-```
-then run this command to go into the repository you just cloned
-```shell
+
+Default module-launcher ports:
+- Backend: `51234`
+- Frontend: `51235`
+
+See `ExpressDiff/docs/DEPLOYMENT_HPC.md:1`.
+
+## Quick Start (Developers)
+
+### Run from source (local dev defaults)
+```bash
 cd ExpressDiff
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
-would look something similar to this:
-![image_info](pictures/clone.png)
-I used this command to check the contents of the current directory:
-```shell
-ls
-```
-Then, can click on the ExpressDiff folder on the left to open it in the sidebar
-## Open setup.ipynb (from the sidebar on the left)
-Hit button to restart kernel and run all cells and make sure to use Python3 kernel
-![image info](pictures/run.png)
-## Scroll to bottom and copy the Network URL
-![image info](pictures/networkurl.png)
-## Go to the Desktop interactive job tab and open a web browser (Firefox is already installed) then paste in the Network URL in a new tab to open app
-![image_info](pictures/desktop.png)
 
-# MEMORY
-if you see this, then you may need to allocate more memory:
-![image_info](pictures/error.png)
-The AxiosError: NetworkError means that the program couldn't connect because the program could have terminated because it didn't have enough memory. The amount of memory you need depends on the files you're using (the file manager should show how large the files are). Also, can drag or control click to select multiple files.
+```bash
+cd ExpressDiff/frontend
+npm install
+REACT_APP_API_URL=http://localhost:8000 npm start
+```
+
+Default dev ports:
+- Backend: `8000`
+- Frontend: `3000`
+
+See `ExpressDiff/docs/INSTALLATION.md:1`.
+
+## Pipeline Overview
+
+Stages (in order) are defined by SLURM templates in `ExpressDiff/slurm_templates/qc_raw.slurm.template:1` and managed by the backend:
+1. QC (raw): FastQC + MultiQC
+2. Trim: Trimmomatic
+3. QC (trimmed): FastQC + MultiQC
+4. Align: STAR
+5. Count: featureCounts
+6. Differential expression: “DESeq2” stage implemented via PyDESeq2
+
+Canonical stage reference: `ExpressDiff/docs/PIPELINE.md:1`.
+
+## Tools Used
+
+- Bioinformatics tools: `ExpressDiff/docs/TOOLS_BIOINFORMATICS.md:1`
+- Implementation tools (FastAPI/React/SLURM integration): `ExpressDiff/docs/TOOLS_IMPLEMENTATION.md:1`
+
+## Repository Layout
+
+See `ExpressDiff/REPOSITORY_ORGANIZATION.md:1` for a full tree; key directories:
+- `ExpressDiff/backend/` — FastAPI backend
+- `ExpressDiff/frontend/` — React frontend
+- `ExpressDiff/slurm_templates/` — SLURM job templates
+- `ExpressDiff/test_data_generators/` — scripts to generate small test/demo data
+
+## Support
+
+Contact: `vth3bk@virginia.edu`

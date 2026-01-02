@@ -1,5 +1,106 @@
-**/
+# Selection files (user-specific, regenerated)
 selected_account.txt
 selected_adapter.txt
-venv
+
+# Python virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Jupyter
 .ipynb_checkpoints/
+*.ipynb
+
+# Backend cache and temporary files
+backend/__pycache__/
+backend/**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+
+# Run data (user-generated content - now in SCRATCH)
+runs/
+STAR_out/
+raw_fastqc_out/
+raw_multiqc_out/
+qc_logs/
+featureCounts_logs/
+
+# Generated SLURM scripts (dynamically created)
+generated_slurm/
+
+# Old metadata examples
+metadata/
+
+# Pictures directory (legacy documentation)
+pictures/
+
+# Reference genome/GTF files (users provide their own)
+mapping_in/
+
+# Old SLURM scripts (replaced by templates)
+/*.slurm
+
+# Legacy code
+legacy/
+
+# Environment files
+.env
+.env.local
+
+# Log files
+*.log
+Log.out
+backend.log
+
+# Test/Debug scripts
+test_*.py
+test_*.sh
+debug_*.py
+diagnose_*.sh
+preflight_check.sh
+find_runs.sh
+run_deseq2.py
+
+# Development documentation (keep main README and DEVELOPMENT*)
+CONTACT_INFO_UPDATES.md
+DEMO_*.md
+DESEQ2_*.md
+FEATURECOUNTS_INFO.md
+FRONTEND_STORAGE_INFO.md
+METADATA_*.md
+RERUN_BEHAVIOR.md
+SCRATCH_STORAGE_READY.md
+STAR_IMPROVEMENTS.md
+STORAGE_SETUP.md
+TEST_*.md
+TRIMMING_ARCHITECTURE.md
+VALIDATION_SYSTEM.md
+
+# Planning and reference documentation
+CLEANUP_SUMMARY.md
+DEPLOYMENT_CLEANUP.md
+REPOSITORY_ORGANIZATION.md
+DEVELOPMENT_SETUP.md
+DEVELOPMENT.md
+PYTHON_311_UPDATE.md
+TESTING_LAUNCHER.md
+actions_taken.md
+
+# Node modules and build artifacts
+frontend/node_modules/
+frontend/build/
+frontend/.env.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

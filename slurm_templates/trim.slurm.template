@@ -1,0 +1,188 @@
+#!/bin/bash
+#SBATCH --job-name=Trim_{RUN_ID}
+#SBATCH --time=06:00:00
+#SBATCH --partition=standard
+#SBATCH --account={ACCOUNT}
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=64G
+#SBATCH --output={BASE_DIR}/runs/{RUN_ID}/trimmed/trim_%j.out
+#SBATCH --error={BASE_DIR}/runs/{RUN_ID}/trimmed/trim_%j.err
+
+set -euo pipefail
+
+# Run configuration
+RUN_ID="{RUN_ID}"
+BASE_DIR="{BASE_DIR}"
+RAW_DIR="{BASE_DIR}/runs/{RUN_ID}/raw"
+TRIMMED_DIR="{BASE_DIR}/runs/{RUN_ID}/trimmed"
+ADAPTER_TYPE="{ADAPTER_TYPE}"
+
+echo "=== Trimmomatic Adapter Trimming ==="
+echo "Run ID: $RUN_ID"
+echo "Base directory: $BASE_DIR"
+echo "Input directory: $RAW_DIR"
+echo "Output directory: $TRIMMED_DIR"
+echo "Adapter type: $ADAPTER_TYPE"
+echo
+
+# Create output directories
+mkdir -p "${TRIMMED_DIR}"
+mkdir -p "${TRIMMED_DIR}/logs"
+
+# Clean up any previous output
+echo "Cleaning previous trimming output..."
+rm -f "${TRIMMED_DIR}"/*.fq.gz 2>/dev/null || true
+rm -f "${TRIMMED_DIR}"/trimming_done.flag 2>/dev/null || true
+echo "  ✓ Cleanup complete"
+echo ""
+# Ensure the environment modules system is available
+if ! command -v module >/dev/null 2>&1; then
+    if [ -f /etc/profile.d/modules.sh ]; then
+        source /etc/profile.d/modules.sh
+    elif [ -f /usr/share/Modules/init/bash ]; then
+        source /usr/share/Modules/init/bash
+    else
+        echo "WARNING: Environment Modules initialization script not found"
+    fi
+fi
+
+echo "=== Module Diagnostics ==="
+module list || true
+echo ""
+
+# Load required modules (surface any load errors)
+if ! module load trimmomatic; then
+    echo "ERROR: Failed to load trimmomatic module"
+fi
+if ! module load parallel; then
+    echo "WARNING: Failed to load GNU parallel module"
+fi
+
+# Determine Trimmomatic command (prefer EBROOT paths provided by module)
+TRIMMO_CMD=""
+if [ -n "${EBROOTTRIMMOMATIC:-}" ]; then
+    if [ -f "${EBROOTTRIMMOMATIC}/trimmomatic-0.40.jar" ]; then
+        TRIMMO_CMD="java -jar ${EBROOTTRIMMOMATIC}/trimmomatic-0.40.jar"
+    elif [ -f "${EBROOTTRIMMOMATIC}/trimmomatic-0.39.jar" ]; then
+        TRIMMO_CMD="java -jar ${EBROOTTRIMMOMATIC}/trimmomatic-0.39.jar"
+    fi
+fi
+
+if [ -z "${TRIMMO_CMD}" ]; then
+    if command -v trimmomatic &> /dev/null; then
+        TRIMMO_CMD="trimmomatic"
+    elif [ -f "/apps/software/standard/core/trimmomatic/0.39/trimmomatic-0.39.jar" ]; then
+        TRIMMO_CMD="java -jar /apps/software/standard/core/trimmomatic/0.39/trimmomatic-0.39.jar"
+    else
+        echo "ERROR: Trimmomatic not found"
+        exit 1
+    fi
+fi
+
+
+echo "Using Trimmomatic: $TRIMMO_CMD"
+
+# Find adapter file
+if [ -n "${EBROOTTRIMMOMATIC:-}" ] && [ -f "${EBROOTTRIMMOMATIC}/adapters/$ADAPTER_TYPE.fa" ]; then
+    ADAPTER_FILE="${EBROOTTRIMMOMATIC}/adapters/$ADAPTER_TYPE.fa"
+elif [ -f "/apps/software/standard/core/trimmomatic/0.39/adapters/$ADAPTER_TYPE.fa" ]; then
+    ADAPTER_FILE="/apps/software/standard/core/trimmomatic/0.39/adapters/$ADAPTER_TYPE.fa"
+else
+    echo "ERROR: Adapter file not found for $ADAPTER_TYPE"
+    exit 1
+fi
+
+echo "Using adapter file: $ADAPTER_FILE"
+echo
+
+# Change to raw directory
+cd "${RAW_DIR}"
+
+# Find all forward read files
+FORWARD_FILES=$(ls *_1.fq.gz *_1.fastq.gz 2>/dev/null || true)
+
+if [ -z "${FORWARD_FILES}" ]; then
+    echo "ERROR: No forward read files found (*_1.fq.gz or *_1.fastq.gz)"
+    exit 1
+fi
+
+echo "Found forward files:"
+echo "${FORWARD_FILES}"
+echo
+
+# Process each pair
+SUCCESS_COUNT=0
+FAIL_COUNT=0
+
+for FWD in ${FORWARD_FILES}; do
+    # Generate reverse filename
+    REV="${FWD/_1./_2.}"
+    
+    # Extract sample name
+    SAMPLE=$(basename "${FWD}" | sed 's/_1\.f.*q\.gz$//')
+    
+    echo "Processing: ${SAMPLE}"
+    echo "  Forward: ${FWD}"
+    echo "  Reverse: ${REV}"
+    
+    # Check reverse file exists
+    if [ ! -f "${REV}" ]; then
+        echo "  ERROR: Reverse file not found: ${REV}"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        continue
+    fi
+    
+    # Set up output files
+    FWD_PAIRED="${TRIMMED_DIR}/${SAMPLE}_forward_paired.fq.gz"
+    FWD_UNPAIRED="${TRIMMED_DIR}/${SAMPLE}_forward_unpaired.fq.gz"
+    REV_PAIRED="${TRIMMED_DIR}/${SAMPLE}_reverse_paired.fq.gz"
+    REV_UNPAIRED="${TRIMMED_DIR}/${SAMPLE}_reverse_unpaired.fq.gz"
+    LOG_FILE="${TRIMMED_DIR}/logs/${SAMPLE}_trim.log"
+    
+    # Run Trimmomatic
+    ${TRIMMO_CMD} PE \
+        -threads 2 \
+        "${FWD}" "${REV}" \
+        "${FWD_PAIRED}" "${FWD_UNPAIRED}" \
+        "${REV_PAIRED}" "${REV_UNPAIRED}" \
+        ILLUMINACLIP:"${ADAPTER_FILE}":2:30:10 \
+        LEADING:3 \
+        TRAILING:3 \
+        SLIDINGWINDOW:4:15 \
+        MINLEN:36 \
+        2>&1 | tee "${LOG_FILE}"
+    
+    if [ ${PIPESTATUS[0]} -eq 0 ]; then
+        echo "  ✓ Success"
+        SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+    else
+        echo "  ✗ Failed"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+    fi
+    echo
+done
+
+# Summary
+echo "=== Trimming Summary ==="
+echo "Successful: $SUCCESS_COUNT"
+echo "Failed: $FAIL_COUNT"
+echo
+
+# Check if we have any output
+OUTPUT_COUNT=$(ls "$TRIMMED_DIR"/*_paired.fq.gz 2>/dev/null | wc -l)
+
+if [ "$OUTPUT_COUNT" -eq 0 ]; then
+    echo "ERROR: No trimmed output files created"
+    exit 1
+fi
+
+echo "Created $OUTPUT_COUNT paired output files"
+
+# Create completion flag
+touch "$TRIMMED_DIR/trimming_done.flag"
+echo "✓ Trimming complete for run {RUN_ID}"
+
+
+echo "Created completion flag for run {RUN_ID}"

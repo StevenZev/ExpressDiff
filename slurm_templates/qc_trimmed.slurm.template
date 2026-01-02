@@ -1,0 +1,71 @@
+#!/bin/bash
+#SBATCH --job-name=QC_Trimmed_{RUN_ID}
+#SBATCH --time=01:00:00
+#SBATCH --partition=standard
+#SBATCH --account={ACCOUNT}
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=16G
+#SBATCH --output={RUN_DIR}/qc_trimmed/fastqc_multiqc_%j.out
+#SBATCH --error={RUN_DIR}/qc_trimmed/fastqc_multiqc_%j.err
+
+set -euo pipefail
+
+# Run-specific variables
+RUN_ID="{RUN_ID}"
+RUN_DIR="{RUN_DIR}"
+TRIMMED_DIR="$RUN_DIR/trimmed"
+QC_OUT_DIR="$RUN_DIR/qc_trimmed"
+
+# Ensure we're in the base directory
+cd {BASE_DIR}
+
+# Create necessary output directories
+mkdir -p "$QC_OUT_DIR/fastqc_out"
+mkdir -p "$QC_OUT_DIR/multiqc_out"
+
+# Clean up previous outputs for this run
+echo "Cleaning previous trimmed QC output..."
+rm -f "$QC_OUT_DIR/fastqc_out"/* 2>/dev/null || true
+rm -f "$QC_OUT_DIR/multiqc_out"/* 2>/dev/null || true
+rm -f "$QC_OUT_DIR"/qc_trimmed_done.flag 2>/dev/null || true
+echo "  ✓ Cleanup complete"
+echo ""
+
+# Load required modules
+module load fastqc
+module load multiqc
+module load parallel
+
+echo "Starting parallel FastQC analysis on trimmed reads for run $RUN_ID"
+echo "Input directory: $TRIMMED_DIR"
+echo "Output directory: $QC_OUT_DIR"
+
+# Check if trimmed files exist
+PAIRED_FILES=$(find "$TRIMMED_DIR" -name "*_paired.fq.gz" 2>/dev/null | wc -l)
+if [ ! -d "$TRIMMED_DIR" ] || [ "$PAIRED_FILES" -eq 0 ]; then
+    echo "ERROR: No trimmed FASTQ files found in $TRIMMED_DIR"
+    exit 1
+fi
+
+# Export variables for GNU parallel
+export FASTQC_OUT_DIR="$QC_OUT_DIR/fastqc_out"
+export THREADS_PER_FILE=1
+
+# Run FastQC in parallel across all paired files (skip unpaired)
+find "$TRIMMED_DIR" -name "*_paired.fq.gz" | \
+    parallel -j $SLURM_CPUS_PER_TASK --halt now,fail=1 \
+    "fastqc --threads $THREADS_PER_FILE -o $FASTQC_OUT_DIR {}"
+
+echo "FastQC analysis complete. Running MultiQC to aggregate the reports."
+
+# Run MultiQC on the FastQC output directory
+multiqc -o "$QC_OUT_DIR/multiqc_out" "$QC_OUT_DIR/fastqc_out"
+
+echo "MultiQC aggregation complete. Outputs saved in $QC_OUT_DIR/"
+
+# Create completion flag
+touch "$QC_OUT_DIR/qc_trimmed_done.flag"
+
+echo "Created completion flag for run $RUN_ID"

@@ -1,0 +1,283 @@
+#!/bin/bash
+#SBATCH --job-name=DESeq2_{RUN_ID}
+#SBATCH --time=01:00:00
+#SBATCH --partition=standard
+#SBATCH --account={ACCOUNT}
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --output={RUN_DIR}/logs/deseq2_%j.out
+#SBATCH --error={RUN_DIR}/logs/deseq2_%j.err
+
+set -euo pipefail
+
+echo "============================================================"
+echo "=== DESeq2 Differential Expression Analysis ==="
+echo "============================================================"
+echo "Run ID: {RUN_ID}"
+echo "Base directory: {BASE_DIR}"
+echo "Run directory: {RUN_DIR}"
+echo "Started at: $(date)"
+echo ""
+
+# Directories
+INPUT_DIR="{RUN_DIR}/featurecounts"
+OUTPUT_DIR="{RUN_DIR}/deseq2"
+METADATA_FILE="{RUN_DIR}/metadata/metadata.csv"
+COUNTS_FILE="${INPUT_DIR}/counts.txt"
+
+# Create output directory
+mkdir -p "${OUTPUT_DIR}"
+
+# Check if featureCounts output exists
+if [ ! -f "${COUNTS_FILE}" ]; then
+    echo "ERROR: featureCounts output not found at: ${COUNTS_FILE}"
+    echo "Please run the featureCounts stage first."
+    exit 1
+fi
+
+# Check if metadata exists
+if [ ! -f "${METADATA_FILE}" ]; then
+    echo "ERROR: Metadata file not found at: ${METADATA_FILE}"
+    echo "Please upload metadata.csv with columns: sample_name, condition"
+    exit 1
+fi
+
+echo "Input files:"
+echo "  Counts: ${COUNTS_FILE}"
+echo "  Metadata: ${METADATA_FILE}"
+echo ""
+
+# Load miniforge and activate conda environment
+module purge
+module load miniforge/24.3.0-py3.11
+
+echo "Initializing conda..."
+eval "$(conda shell.bash hook)"
+
+echo "Activating testenv conda environment..."
+conda activate testenv
+
+echo "Python version: $(python --version)"
+echo "Checking pydeseq2 installation..."
+python -c "import pydeseq2; print(f'pydeseq2 version: {pydeseq2.__version__}')"
+echo ""
+
+# Create Python script for DESeq2 analysis
+cat > "${OUTPUT_DIR}/run_deseq2.py" << 'EOFPYTHON'
+#!/usr/bin/env python3
+"""
+DESeq2 differential expression analysis using pydeseq2.
+"""
+import sys
+import pandas as pd
+import numpy as np
+from pathlib import Path
+from pydeseq2.dds import DeseqDataSet
+from pydeseq2.ds import DeseqStats
+
+def prepare_counts_matrix(counts_file, output_file):
+    """
+    Convert featureCounts output to DESeq2-compatible matrix.
+    featureCounts format: Geneid, Chr, Start, End, Strand, Length, Sample1, Sample2, ...
+    """
+    print("Reading featureCounts output...")
+    counts_df = pd.read_csv(counts_file, sep='\t', comment='#')
+    
+    # Extract sample columns (skip first 6 metadata columns)
+    sample_cols = counts_df.columns[6:]
+    print(f"Found {len(sample_cols)} samples: {', '.join(sample_cols)}")
+    
+    # Clean up sample names (remove path and _Aligned.sortedByCoord.out.bam)
+    clean_names = []
+    for col in sample_cols:
+        # Extract just the sample name from the full path
+        sample_name = Path(col).stem.replace('_Aligned.sortedByCoord.out', '')
+        clean_names.append(sample_name)
+    
+    # Create counts matrix with gene IDs as index
+    counts_matrix = counts_df[['Geneid'] + list(sample_cols)].copy()
+    counts_matrix.columns = ['Geneid'] + clean_names
+    counts_matrix = counts_matrix.set_index('Geneid')
+    
+    # Save processed matrix
+    counts_matrix.to_csv(output_file)
+    print(f"Saved counts matrix to: {output_file}")
+    print(f"Matrix shape: {counts_matrix.shape}")
+    
+    return counts_matrix, clean_names
+
+def run_deseq2_analysis(counts_matrix, metadata_file, output_dir, control_condition='control', treatment_condition='treatment'):
+    """
+    Run DESeq2 differential expression analysis.
+    """
+    output_dir = Path(output_dir)
+    
+    print("\nReading metadata...")
+    metadata = pd.read_csv(metadata_file)
+    
+    # Ensure metadata has required columns
+    if 'sample_name' not in metadata.columns or 'condition' not in metadata.columns:
+        raise ValueError("Metadata must have 'sample_name' and 'condition' columns")
+    
+    # Set sample_name as index
+    metadata = metadata.set_index('sample_name')
+    
+    # Ensure metadata matches counts matrix samples
+    sample_names = counts_matrix.columns.tolist()
+    metadata = metadata.loc[sample_names]
+    
+    print(f"Metadata shape: {metadata.shape}")
+    print(f"Conditions: {metadata['condition'].value_counts().to_dict()}")
+    
+    # Transpose counts for DESeq2 (samples as rows, genes as columns)
+    counts_transposed = counts_matrix.T
+    
+    print(f"\nCounts matrix shape (samples × genes): {counts_transposed.shape}")
+    print(f"Total counts per sample:")
+    for sample in counts_transposed.index:
+        total = counts_transposed.loc[sample].sum()
+        print(f"  {sample}: {int(total):,}")
+    
+    # Create DESeqDataSet
+    print("\nCreating DESeqDataSet...")
+    dds = DeseqDataSet(
+        counts=counts_transposed,
+        metadata=metadata,
+        design="~condition",  # Use formula syntax instead of design_factors
+        refit_cooks=True,
+        n_cpus=4  # Use available CPUs
+    )
+    
+    # Run DESeq2 analysis
+    print("Running DESeq2 normalization and dispersion estimation...")
+    dds.deseq2()
+    
+    # Perform statistical testing
+    print(f"Performing differential expression test: {treatment_condition} vs {control_condition}")
+    stat_res = DeseqStats(
+        dds,
+        contrast=["condition", treatment_condition, control_condition]
+        # Note: n_cpus not supported in DeseqStats
+    )
+    
+    print("Running Wald test and multiple testing correction...")
+    stat_res.summary()
+    
+    # Get results
+    results_df = stat_res.results_df
+    
+    # Save full results
+    full_results_file = output_dir / "full_results.csv"
+    results_df.to_csv(full_results_file)
+    print(f"\nSaved full results to: {full_results_file}")
+    print(f"Total genes analyzed: {len(results_df)}")
+    
+    # Filter for significant DEGs
+    print("\nFiltering for significant DEGs (padj < 0.05, |log2FC| > 1)...")
+    degs = results_df.dropna(subset=["padj"]).copy()
+    degs_sig = degs[(degs["padj"] < 0.05) & (abs(degs["log2FoldChange"]) > 1)]
+    
+    print(f"Total significant DEGs: {len(degs_sig)}")
+    if len(degs_sig) > 0:
+        upregulated = degs_sig[degs_sig["log2FoldChange"] > 0]
+        downregulated = degs_sig[degs_sig["log2FoldChange"] < 0]
+        print(f"  Upregulated: {len(upregulated)}")
+        print(f"  Downregulated: {len(downregulated)}")
+        
+        # Save top DEGs
+        top_degs = degs_sig.sort_values("padj").head(50)
+        top_degs_file = output_dir / "top_degs.csv"
+        top_degs.to_csv(top_degs_file)
+        print(f"\nSaved top 50 DEGs to: {top_degs_file}")
+        
+        # Save all significant DEGs
+        sig_degs_file = output_dir / "significant_degs.csv"
+        degs_sig.to_csv(sig_degs_file)
+        print(f"Saved all significant DEGs to: {sig_degs_file}")
+        
+        # Print top 10
+        print("\nTop 10 most significant DEGs:")
+        print(top_degs[['baseMean', 'log2FoldChange', 'pvalue', 'padj']].head(10).to_string())
+    else:
+        print("No significant DEGs found with current thresholds.")
+        # Still save a file with top genes by p-value
+        top_by_pval = results_df.dropna(subset=["padj"]).sort_values("padj").head(50)
+        top_degs_file = output_dir / "top_degs.csv"
+        top_by_pval.to_csv(top_degs_file)
+        print(f"Saved top 50 genes by p-value to: {top_degs_file}")
+    
+    # Save summary statistics
+    summary_file = output_dir / "summary.txt"
+    with open(summary_file, 'w') as f:
+        f.write(f"DESeq2 Analysis Summary\n")
+        f.write(f"{'='*50}\n\n")
+        f.write(f"Comparison: {treatment_condition} vs {control_condition}\n")
+        f.write(f"Total genes: {len(results_df)}\n")
+        f.write(f"Genes with valid p-value: {len(degs)}\n")
+        f.write(f"Significant DEGs (padj < 0.05, |log2FC| > 1): {len(degs_sig)}\n")
+        if len(degs_sig) > 0:
+            f.write(f"  Upregulated: {len(upregulated)}\n")
+            f.write(f"  Downregulated: {len(downregulated)}\n")
+    
+    print(f"\nSaved summary to: {summary_file}")
+    
+    return results_df, degs_sig
+
+if __name__ == "__main__":
+    # Parse command-line arguments
+    if len(sys.argv) != 4:
+        print("Usage: run_deseq2.py <counts_file> <metadata_file> <output_dir>")
+        sys.exit(1)
+    
+    counts_file = sys.argv[1]
+    metadata_file = sys.argv[2]
+    output_dir = sys.argv[3]
+    
+    try:
+        # Prepare counts matrix
+        counts_matrix_file = Path(output_dir) / "counts_matrix.csv"
+        counts_matrix, sample_names = prepare_counts_matrix(counts_file, counts_matrix_file)
+        
+        # Run DESeq2
+        results_df, degs = run_deseq2_analysis(
+            counts_matrix,
+            metadata_file,
+            output_dir,
+            control_condition='control',
+            treatment_condition='treatment'
+        )
+        
+        print("\n" + "="*60)
+        print("DESeq2 analysis completed successfully!")
+        print("="*60)
+        
+    except Exception as e:
+        print(f"\nERROR: DESeq2 analysis failed: {str(e)}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+EOFPYTHON
+
+echo "Running DESeq2 analysis..."
+python "${OUTPUT_DIR}/run_deseq2.py" "${COUNTS_FILE}" "${METADATA_FILE}" "${OUTPUT_DIR}"
+
+if [ $? -eq 0 ]; then
+    echo ""
+    echo "============================================================"
+    echo "DESeq2 analysis completed successfully!"
+    echo "Results saved to: ${OUTPUT_DIR}"
+    echo "Completed at: $(date)"
+    echo "============================================================"
+    
+    # Create completion flag
+    touch "{RUN_DIR}/logs/deseq2_done.flag"
+else
+    echo ""
+    echo "============================================================"
+    echo "ERROR: DESeq2 analysis failed"
+    echo "Check the error log for details"
+    echo "============================================================"
+    exit 1
+fi
